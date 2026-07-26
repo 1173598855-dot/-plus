@@ -47,6 +47,27 @@ describe('TaskWorkspace', () => {
     expect(screen.getByText('任务管理库第一篇文档')).toBeInTheDocument();
   });
 
+  it('toggles the mobile filter disclosure and reports active filter count', async () => {
+    const user = userEvent.setup();
+    render(<TaskWorkspace />);
+    const toggle = screen.getByRole('button', { name: '展开筛选（0）' });
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByLabelText('任务筛选')).not.toHaveClass('mobile-expanded');
+
+    await user.click(toggle);
+    expect(screen.getByLabelText('任务筛选')).toHaveClass('mobile-expanded');
+
+    await user.selectOptions(screen.getByLabelText('按优先级筛选'), 'high');
+    expect(screen.getByRole('button', { name: '收起筛选（1）' })).toBeInTheDocument();
+  });
+
+  it('renders one all option in the date filter', () => {
+    render(<TaskWorkspace />);
+
+    expect(within(screen.getByLabelText('按日期筛选')).getAllByRole('option', { name: '全部日期' })).toHaveLength(1);
+  });
+
   it('creates a task and persists it to localStorage', async () => {
     const user = userEvent.setup();
     render(<TaskWorkspace />);

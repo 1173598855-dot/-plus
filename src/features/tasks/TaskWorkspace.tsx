@@ -37,6 +37,7 @@ export function TaskWorkspace() {
   const [draggedTaskId, setDraggedTaskId] = useState('');
   const [dragOverStatus, setDragOverStatus] = useState<TaskStatus | ''>('');
   const [isQuickAddExpanded, setIsQuickAddExpanded] = useState(false);
+  const [isMobileFiltersExpanded, setIsMobileFiltersExpanded] = useState(false);
   const projects = useMemo(() => [...new Set(tasks.map((task) => task.project).filter(Boolean))], [tasks]);
   const labelOptions = useMemo(() => [...new Set(tasks.flatMap((task) => task.labels))], [tasks]);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -370,11 +371,13 @@ export function TaskWorkspace() {
           filters={filters}
           workspaceStatus={workspaceStatus}
           activeFilterLabels={activeFilterLabels}
+          activeFilterCount={activeFilterLabels.length}
           hasActiveFilters={hasActiveFilters}
           showDetail={showDetail}
           projects={projects}
           labelOptions={labelOptions}
           hideCompleted={hideCompleted}
+          isMobileFiltersExpanded={isMobileFiltersExpanded}
           bulkActions={(
             <TaskBulkActions
               selectedCount={visibleSelectedTaskIds.length}
@@ -389,6 +392,7 @@ export function TaskWorkspace() {
           onClearFilters={clearFilters}
           onShowDetailChange={setShowDetail}
           onHideCompletedChange={setHideCompleted}
+          onMobileFiltersExpandedChange={setIsMobileFiltersExpanded}
         />
 
         <div className={`content-grid ${showDetail ? '' : 'detail-collapsed'}`}>

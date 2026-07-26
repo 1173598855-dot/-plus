@@ -99,6 +99,9 @@ export const toolbarLabels = {
   due: '按日期筛选',
   statusFilter: '按状态筛选',
   priority: '按优先级筛选',
+  filters: '任务筛选',
+  expandFilters: '展开筛选',
+  collapseFilters: '收起筛选',
 } as const;
 
 export const bulkLabels = {
