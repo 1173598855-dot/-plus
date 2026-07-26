@@ -10,6 +10,7 @@ export interface TaskQuickAddProps {
   labelInput: string;
   titleInputRef: Ref<HTMLInputElement>;
   isExpanded: boolean;
+  isInert: boolean;
   message: string;
   pendingImportCount: number;
   onDraftChange: (draft: TaskDraft) => void;
@@ -29,6 +30,7 @@ export function TaskQuickAdd({
   labelInput,
   titleInputRef,
   isExpanded,
+  isInert,
   message,
   pendingImportCount,
   onDraftChange,
@@ -42,7 +44,7 @@ export function TaskQuickAdd({
   onCancelImport,
 }: TaskQuickAddProps) {
   return (
-    <aside className="rail" aria-label={quickAddLabels.rail}>
+    <aside className="rail" aria-label={quickAddLabels.rail} inert={isInert || undefined}>
       <div className="brand-block">
         <span className="brand-mark">{quickAddLabels.brandMark}</span>
         <div>

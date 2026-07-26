@@ -21,7 +21,7 @@ export interface TaskViewsProps {
   onClearFilters: () => void;
   onToggleTaskSelection: (taskId: string) => void;
   onToggleDone: (task: Task) => void;
-  onOpenDetail: (task: Task) => void;
+  onOpenDetail: (task: Task, trigger?: HTMLElement) => void;
   onTaskDragStart: (event: DragEvent<HTMLElement>, task: Task) => void;
   onTaskDragEnd: () => void;
   onTaskDragOver: (event: DragEvent<HTMLElement>, status: TaskStatus) => void;
@@ -91,15 +91,24 @@ export function TaskViews({
             {task.project && <span>{task.project}</span>}
           </div>
         </div>
+        <button
+          className="icon-button task-detail-button"
+          type="button"
+          aria-label={`查看详情：${task.title}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpenDetail(task, event.currentTarget);
+          }}
+        >
+          <PanelRightOpen size={16} />
+        </button>
       </article>
     );
   }
 
-  function getEmptyStateVariant(label: string): EmptyStateVariant {
+  function getEmptyStateVariant(semanticVariant: Exclude<EmptyStateVariant, 'filtered'>): EmptyStateVariant {
     if (hasActiveFilters) return 'filtered';
-    if (label === '已完成任务') return 'completed';
-    if (label === '今日任务') return 'today';
-    return 'board';
+    return semanticVariant;
   }
 
   function getEmptyStateMessage(variant: EmptyStateVariant) {
@@ -109,8 +118,8 @@ export function TaskViews({
     return emptyMessages.board;
   }
 
-  function renderList(tasksToRender: Task[], label: string) {
-    const emptyStateVariant = getEmptyStateVariant(label);
+  function renderList(tasksToRender: Task[], label: string, semanticVariant: Exclude<EmptyStateVariant, 'filtered'>) {
+    const emptyStateVariant = getEmptyStateVariant(semanticVariant);
     const emptyStateMessage = getEmptyStateMessage(emptyStateVariant);
 
     return (
@@ -157,7 +166,7 @@ export function TaskViews({
                   aria-label={`查看详情：${task.title}`}
                   onClick={(event) => {
                     event.stopPropagation();
-                    onOpenDetail(task);
+                    onOpenDetail(task, event.currentTarget);
                   }}
                 >
                   <PanelRightOpen size={16} />
@@ -208,9 +217,9 @@ export function TaskViews({
           ))}
         </section>
       )}
-      {viewMode === 'list' && renderList(filteredTasks, '任务列表')}
-      {viewMode === 'today' && renderList(todayTasks, '今日任务')}
-      {viewMode === 'completed' && renderList(completedTasks, '已完成任务')}
+      {viewMode === 'list' && renderList(filteredTasks, '任务列表', 'board')}
+      {viewMode === 'today' && renderList(todayTasks, '今日任务', 'today')}
+      {viewMode === 'completed' && renderList(completedTasks, '已完成任务', 'completed')}
     </>
   );
 }

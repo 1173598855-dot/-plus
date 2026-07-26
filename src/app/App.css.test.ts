@@ -151,6 +151,23 @@ describe('App.css', () => {
     expect(getRuleBodyFromSource(mobileBody, '.workspace-status .clear-filter')).toContain('min-height: 40px');
   });
 
+  it('positions the board detail action without narrowing task content', () => {
+    const mobileBody = getMediaBody('(max-width: 720px)');
+    const cardRule = getRuleBody('.task-card');
+    const detailButtonRule = getRuleBody('.task-detail-button');
+
+    expect(getGridTemplateColumns('.task-card')).toBe('24px 32px minmax(0, 1fr)');
+    expect(cardRule).toContain('position: relative');
+    expect(detailButtonRule).toContain('position: absolute');
+    expect(detailButtonRule).toContain('top: var(--space-3)');
+    expect(detailButtonRule).toContain('right: var(--space-3)');
+    expect(getRuleBody('.task-card h3')).toContain('min-height: 32px');
+    expect(getRuleBody('.task-card h3')).toContain('padding-right: 36px');
+    expect(getRuleBodyFromSource(mobileBody, '.task-card')).toContain('grid-template-columns: 40px 40px minmax(0, 1fr)');
+    expect(getRuleBodyFromSource(mobileBody, '.task-card h3')).toContain('min-height: 40px');
+    expect(getRuleBodyFromSource(mobileBody, '.task-card h3')).toContain('padding-right: 44px');
+  });
+
   it('shows a visible focus ring on composite search and file controls', () => {
     for (const selector of ['.search-box:focus-within', '.file-action:focus-within']) {
       const focusRule = getRuleBody(selector);

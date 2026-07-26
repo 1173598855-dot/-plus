@@ -7,7 +7,7 @@ import { createTask, deleteTask, filterTasks, groupTasksByStatus, moveTask, norm
 import { exportTasksToJson, importTasksFromJson } from './taskBackup';
 import { seedTasks } from './seedTasks';
 import { TaskBulkActions } from './TaskBulkActions';
-import { TaskDetailPanel } from './TaskDetailPanel';
+import { detailHeadingId, TaskDetailPanel } from './TaskDetailPanel';
 import { TaskQuickAdd } from './TaskQuickAdd';
 import { TaskToolbar } from './TaskToolbar';
 import type { TaskViewMode } from './TaskToolbar';
@@ -21,6 +21,7 @@ const emptyDraft: TaskDraft = { title: '', notes: '', status: 'inbox', priority:
 
 const handledDropType = 'application/x-task-drop-handled';
 const cardDropType = 'application/x-task-card-drop';
+const drawerFocusableSelector = 'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export function TaskWorkspace() {
   const [tasks, setTasks] = useState<Task[]>(() => normalizeTasks(loadJson<Task[]>(storageKey, seedTasks)));
@@ -42,6 +43,9 @@ export function TaskWorkspace() {
   const labelOptions = useMemo(() => [...new Set(tasks.flatMap((task) => task.labels))], [tasks]);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const detailLayerRef = useRef<HTMLDivElement>(null);
+  const detailCloseButtonRef = useRef<HTMLButtonElement>(null);
+  const detailTriggerRef = useRef<HTMLElement | null>(null);
   const today = useMemo(() => todayIso(), []);
 
   useEffect(() => {
@@ -59,6 +63,8 @@ export function TaskWorkspace() {
     }
 
     function handleShortcut(event: KeyboardEvent) {
+      if (showDetail) return;
+
       if (event.key === 'Escape' && isTypingTarget(event.target)) {
         (event.target as HTMLElement).blur();
         return;
@@ -84,7 +90,49 @@ export function TaskWorkspace() {
 
     window.addEventListener('keydown', handleShortcut);
     return () => window.removeEventListener('keydown', handleShortcut);
-  }, []);
+  }, [showDetail]);
+
+  useEffect(() => {
+    if (!showDetail) return;
+    const dialog = detailLayerRef.current;
+    if (!dialog) return;
+    const trigger = detailTriggerRef.current;
+
+    detailCloseButtonRef.current?.focus();
+
+    function handleModalKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        setShowDetail(false);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+
+      const focusableElements = Array.from(dialog?.querySelectorAll<HTMLElement>(drawerFocusableSelector) ?? []);
+      const first = focusableElements[0];
+      const last = focusableElements.at(-1);
+      if (!first || !last) {
+        event.preventDefault();
+        return;
+      }
+
+      if (event.shiftKey && (document.activeElement === first || !dialog?.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !dialog?.contains(document.activeElement))) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener('keydown', handleModalKeyDown, true);
+    return () => {
+      document.removeEventListener('keydown', handleModalKeyDown, true);
+      if (trigger?.isConnected) trigger.focus();
+      detailTriggerRef.current = null;
+    };
+  }, [showDetail]);
 
   const sortedTasks = useMemo(() => sortTasks(tasks, today), [tasks, today]);
   const filteredTasks = useMemo(() => {
@@ -111,7 +159,6 @@ export function TaskWorkspace() {
     if (viewMode === 'completed') return completedTasks;
     return filteredTasks;
   }, [completedTasks, filteredTasks, todayTasks, viewMode]);
-  const visibleDetailLabel = viewMode === 'today' ? '今日任务' : viewMode === 'completed' ? '已完成任务' : '状态看板';
   const selectedTask = visibleDetailTasks.find((task) => task.id === selectedId) ?? visibleDetailTasks[0];
   const visibleSelectedTaskIds = useMemo(() => visibleDetailTasks.filter((task) => selectedTaskIds.includes(task.id)).map((task) => task.id), [selectedTaskIds, visibleDetailTasks]);
 
@@ -163,6 +210,16 @@ export function TaskWorkspace() {
   function resetDraft() {
     setDraft(emptyDraft);
     setLabelInput('');
+  }
+
+  function openDetail(task?: Task, trigger?: HTMLElement) {
+    detailTriggerRef.current = trigger ?? null;
+    if (task) setSelectedId(task.id);
+    setShowDetail(true);
+  }
+
+  function closeDetail() {
+    setShowDetail(false);
   }
 
   function addTask() {
@@ -336,10 +393,10 @@ export function TaskWorkspace() {
     setMessage(`已移动“${task.title}”到“${targetTask.title}”前。`);
   }
 
-  function getDetailEmptyStateMessage(label: string) {
+  function getDetailEmptyStateMessage(currentViewMode: TaskViewMode) {
     if (hasActiveFilters) return emptyMessages.detailFiltered;
-    if (label === '已完成任务') return emptyMessages.detailCompleted;
-    if (label === '今日任务') return emptyMessages.detailToday;
+    if (currentViewMode === 'completed') return emptyMessages.detailCompleted;
+    if (currentViewMode === 'today') return emptyMessages.detailToday;
     return emptyMessages.detailBoard;
   }
 
@@ -351,6 +408,7 @@ export function TaskWorkspace() {
         labelInput={labelInput}
         titleInputRef={titleInputRef}
         isExpanded={isQuickAddExpanded}
+        isInert={showDetail}
         message={message}
         pendingImportCount={pendingImport.length}
         onDraftChange={setDraft}
@@ -364,7 +422,7 @@ export function TaskWorkspace() {
         onCancelImport={cancelImport}
       />
 
-      <section className="main-panel" aria-label={toolbarLabels.mainPanel}>
+      <section className="main-panel" aria-label={toolbarLabels.mainPanel} inert={showDetail || undefined}>
         <TaskToolbar
           viewMode={viewMode}
           searchInputRef={searchInputRef}
@@ -390,7 +448,7 @@ export function TaskWorkspace() {
           onViewModeChange={setViewMode}
           onFiltersChange={setFilters}
           onClearFilters={clearFilters}
-          onShowDetailChange={setShowDetail}
+          onShowDetailChange={(isOpen, trigger) => (isOpen ? openDetail(undefined, trigger) : closeDetail())}
           onHideCompletedChange={setHideCompleted}
           onMobileFiltersExpandedChange={setIsMobileFiltersExpanded}
         />
@@ -410,10 +468,7 @@ export function TaskWorkspace() {
             onClearFilters={clearFilters}
             onToggleTaskSelection={toggleTaskSelection}
             onToggleDone={toggleDone}
-            onOpenDetail={(task) => {
-              setSelectedId(task.id);
-              setShowDetail(true);
-            }}
+            onOpenDetail={openDetail}
             onTaskDragStart={handleTaskDragStart}
             onTaskDragEnd={handleTaskDragEnd}
             onTaskDragOver={handleTaskDragOver}
@@ -424,19 +479,27 @@ export function TaskWorkspace() {
           />
 
         </div>
-        {showDetail && (
-          <div className="detail-layer" aria-label="任务详情层">
-            <div className="detail-scrim" aria-hidden="true" onClick={() => setShowDetail(false)} />
-            <TaskDetailPanel
-              task={selectedTask}
-              emptyMessage={getDetailEmptyStateMessage(visibleDetailLabel)}
-              onPatch={patchTask}
-              onRemove={removeTask}
-              onClose={() => setShowDetail(false)}
-            />
-          </div>
-        )}
       </section>
+      {showDetail && (
+        <div
+          ref={detailLayerRef}
+          className="detail-layer"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={detailHeadingId}
+          aria-label="任务详情层"
+        >
+          <div className="detail-scrim" aria-hidden="true" onClick={closeDetail} />
+          <TaskDetailPanel
+            task={selectedTask}
+            emptyMessage={getDetailEmptyStateMessage(viewMode)}
+            closeButtonRef={detailCloseButtonRef}
+            onPatch={patchTask}
+            onRemove={removeTask}
+            onClose={closeDetail}
+          />
+        </div>
+      )}
     </main>
   );
 }

@@ -53,13 +53,20 @@ describe('TaskWorkspace', () => {
     const toggle = screen.getByRole('button', { name: '展开筛选（0）' });
 
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveAttribute('aria-controls', 'task-filter-strip');
     expect(screen.getByLabelText('任务筛选')).not.toHaveClass('mobile-expanded');
 
     await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByLabelText('任务筛选')).toHaveClass('mobile-expanded');
 
     await user.selectOptions(screen.getByLabelText('按优先级筛选'), 'high');
-    expect(screen.getByRole('button', { name: '收起筛选（1）' })).toBeInTheDocument();
+    const expandedToggle = screen.getByRole('button', { name: '收起筛选（1）' });
+    expect(expandedToggle).toHaveAttribute('aria-expanded', 'true');
+
+    await user.click(expandedToggle);
+    expect(screen.getByRole('button', { name: '展开筛选（1）' })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByLabelText('任务筛选')).not.toHaveClass('mobile-expanded');
   });
 
   it('renders one all option in the date filter', () => {
@@ -117,6 +124,18 @@ describe('TaskWorkspace', () => {
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
   });
 
+  it('keeps quick-add details expanded after creating a task', async () => {
+    const user = userEvent.setup();
+    render(<TaskWorkspace />);
+
+    await user.click(screen.getByRole('button', { name: '展开详细字段' }));
+    await user.type(screen.getByLabelText('任务标题'), '保持展开的新任务');
+    await user.click(screen.getByRole('button', { name: /添加任务/ }));
+
+    expect(screen.getByRole('button', { name: '收起详细字段' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByLabelText('任务备注')).toBeInTheDocument();
+  });
+
   it('expands quick add and focuses its title with the n shortcut', async () => {
     const user = userEvent.setup();
     render(<TaskWorkspace />);
@@ -131,11 +150,11 @@ describe('TaskWorkspace', () => {
     const user = userEvent.setup();
     render(<TaskWorkspace />);
 
-    await user.click(screen.getByText('等待反馈：下一步是否加入番茄钟')); 
+    await user.click(screen.getByText('等待反馈：下一步是否加入番茄钟'));
     await user.click(screen.getByRole('button', { name: '切换完成：等待反馈：下一步是否加入番茄钟' }));
     expect(screen.getByText('等待反馈：下一步是否加入番茄钟')).toBeInTheDocument();
 
-    await user.click(screen.getByLabelText('隐藏已完成任务')); 
+    await user.click(screen.getByLabelText('隐藏已完成任务'));
 
     expect(screen.getByText('已筛选 2 / 3 个任务')).toBeInTheDocument();
     expect(screen.queryByText('等待反馈：下一步是否加入番茄钟')).not.toBeInTheDocument();
@@ -145,8 +164,8 @@ describe('TaskWorkspace', () => {
     const user = userEvent.setup();
     render(<TaskWorkspace />);
 
-    await user.click(screen.getByLabelText('选择任务：整理本周重点任务')); 
-    await user.click(screen.getByLabelText('选择任务：任务管理库第一篇文档')); 
+    await user.click(screen.getByLabelText('选择任务：整理本周重点任务'));
+    await user.click(screen.getByLabelText('选择任务：任务管理库第一篇文档'));
 
     expect(screen.getByText('已选择 2 个任务')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '批量完成' }));
@@ -198,6 +217,129 @@ describe('TaskWorkspace', () => {
     expect(screen.getByLabelText('任务详情层')).toBeInTheDocument();
   });
 
+  it('exposes modal drawer semantics, initial focus, and inert background', async () => {
+    const user = userEvent.setup();
+    render(<TaskWorkspace />);
+
+    await user.click(screen.getByText('任务管理库第一篇文档'));
+
+    const dialog = screen.getByRole('dialog', { name: '任务详情' });
+    const headingId = dialog.getAttribute('aria-labelledby');
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(headingId).toBeTruthy();
+    expect(document.getElementById(headingId as string)).toHaveTextContent('任务详情');
+    expect(screen.getByRole('button', { name: '关闭详情面板' })).toHaveFocus();
+    expect(screen.getByLabelText('任务概览')).toHaveAttribute('inert');
+    expect(screen.getByLabelText('工作台')).toHaveAttribute('inert');
+    expect(dialog).not.toHaveAttribute('inert');
+  });
+
+  it('traps forward and reverse tab navigation inside the modal drawer', async () => {
+    const user = userEvent.setup();
+    render(<TaskWorkspace />);
+
+    await user.click(screen.getByText('任务管理库第一篇文档'));
+    const dialog = screen.getByRole('dialog', { name: '任务详情' });
+    const focusableElements = Array.from(
+      dialog.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled])'),
+    );
+    const first = focusableElements[0];
+    const last = focusableElements.at(-1);
+
+    expect(first).toBe(screen.getByRole('button', { name: '关闭详情面板' }));
+    expect(last).toBeDefined();
+    await user.keyboard('{Shift>}{Tab}{/Shift}');
+    expect(last).toHaveFocus();
+    last?.focus();
+    await user.keyboard('{Tab}');
+    expect(first).toHaveFocus();
+  });
+
+  it('blocks global shortcuts while the modal drawer is open', async () => {
+    const user = userEvent.setup();
+    render(<TaskWorkspace />);
+
+    await user.click(screen.getByText('任务管理库第一篇文档'));
+    const closeButton = screen.getByRole('button', { name: '关闭详情面板' });
+
+    await user.keyboard('/n4');
+
+    expect(closeButton).toHaveFocus();
+    expect(screen.getByLabelText('状态看板')).toBeInTheDocument();
+    expect(screen.queryByLabelText('任务备注')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('搜索任务')).not.toHaveFocus();
+  });
+
+  it('always closes an empty completed drawer', async () => {
+    const user = userEvent.setup();
+    render(<TaskWorkspace />);
+
+    await user.click(screen.getByRole('button', { name: '完成' }));
+    await user.click(screen.getByRole('button', { name: '显示详情' }));
+    expect(screen.getByRole('dialog', { name: '任务详情' })).toBeInTheDocument();
+    expect(screen.getByText('还没有已完成的任务可查看。')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '关闭详情面板' }));
+
+    expect(screen.queryByRole('dialog', { name: '任务详情' })).not.toBeInTheDocument();
+  });
+
+  it('opens board details from the explicit keyboard control and restores its focus', async () => {
+    const user = userEvent.setup();
+    render(<TaskWorkspace />);
+    const trigger = screen.getByRole('button', { name: '查看详情：任务管理库第一篇文档' });
+    const card = trigger.closest('article');
+
+    expect(card).not.toHaveAttribute('role', 'button');
+    expect(card).not.toHaveAttribute('tabindex');
+    trigger.focus();
+    await user.keyboard('{Enter}');
+
+    expect(screen.getByRole('dialog', { name: '任务详情' })).toBeInTheDocument();
+    expect(screen.getByLabelText('详情标题')).toHaveValue('任务管理库第一篇文档');
+    expect(screen.getByRole('button', { name: '关闭详情面板' })).toHaveFocus();
+
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('dialog', { name: '任务详情' })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it('opens list details from its explicit keyboard control', async () => {
+    const user = userEvent.setup();
+    render(<TaskWorkspace />);
+
+    await user.click(screen.getByRole('button', { name: '列表' }));
+    const trigger = screen.getByRole('button', { name: '查看详情：整理本周重点任务' });
+    trigger.focus();
+    await user.keyboard('{Enter}');
+
+    expect(screen.getByRole('dialog', { name: '任务详情' })).toBeInTheDocument();
+    expect(screen.getByLabelText('详情标题')).toHaveValue('整理本周重点任务');
+  });
+
+  it('keeps board selection and completion controls from opening details', async () => {
+    const user = userEvent.setup();
+    render(<TaskWorkspace />);
+
+    await user.click(screen.getByLabelText('选择任务：整理本周重点任务'));
+    expect(screen.queryByRole('dialog', { name: '任务详情' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '切换完成：整理本周重点任务' }));
+    expect(screen.queryByRole('dialog', { name: '任务详情' })).not.toBeInTheDocument();
+  });
+
+  it('closes the modal drawer from its scrim', async () => {
+    const user = userEvent.setup();
+    render(<TaskWorkspace />);
+
+    await user.click(screen.getByText('整理本周重点任务'));
+    const dialog = screen.getByRole('dialog', { name: '任务详情' });
+    await user.click(dialog.querySelector('.detail-scrim') as HTMLElement);
+
+    expect(screen.queryByRole('dialog', { name: '任务详情' })).not.toBeInTheDocument();
+  });
+
   it('keeps the selected task when the detail drawer is closed and reopened', async () => {
     const user = userEvent.setup();
     render(<TaskWorkspace />);
@@ -229,6 +371,22 @@ describe('TaskWorkspace', () => {
     await user.click(screen.getByRole('button', { name: '看板' }));
     await user.type(screen.getByLabelText('搜索任务'), '不存在的任务');
     expect(screen.getByTestId('empty-artwork-filtered')).toHaveAttribute('src', expect.stringContaining('search-results'));
+  });
+
+  it('hides failed empty-state artwork and allows a different variant to render', async () => {
+    const user = userEvent.setup();
+    render(<TaskWorkspace />);
+
+    await user.click(screen.getByRole('button', { name: '完成' }));
+    fireEvent.error(screen.getByTestId('empty-artwork-completed'));
+    expect(screen.queryByTestId('empty-artwork-completed')).not.toBeInTheDocument();
+    expect(screen.getByText('还没有已完成的任务。')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '看板' }));
+    await user.type(screen.getByLabelText('搜索任务'), '不存在的任务');
+    const filteredArtwork = screen.getByTestId('empty-artwork-filtered');
+    expect(filteredArtwork).toBeInTheDocument();
+    expect(within(filteredArtwork.closest('.empty-state') as HTMLElement).getByRole('button', { name: '清空筛选' })).toBeInTheDocument();
   });
 
   it('updates the detail panel to the first visible task after filtering', async () => {

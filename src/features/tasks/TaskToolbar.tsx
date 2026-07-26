@@ -23,7 +23,7 @@ export interface TaskToolbarProps {
   onViewModeChange: (viewMode: TaskViewMode) => void;
   onFiltersChange: (filters: TaskFilters) => void;
   onClearFilters: () => void;
-  onShowDetailChange: (showDetail: boolean) => void;
+  onShowDetailChange: (showDetail: boolean, trigger?: HTMLElement) => void;
   onHideCompletedChange: (hideCompleted: boolean) => void;
   onMobileFiltersExpandedChange: (isMobileFiltersExpanded: boolean) => void;
 }
@@ -96,7 +96,7 @@ export function TaskToolbar({
             <PanelRightClose size={16} />
           </button>
         ) : (
-          <button className="icon-button" type="button" onClick={() => onShowDetailChange(true)} aria-label={detailLabels.expand}>
+          <button className="icon-button" type="button" onClick={(event) => onShowDetailChange(true, event.currentTarget)} aria-label={detailLabels.expand}>
             <PanelRightOpen size={16} />
           </button>
         )}

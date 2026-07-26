@@ -689,6 +689,7 @@ button:focus-visible {
 }
 
 .task-card {
+  position: relative;
   display: grid;
   grid-template-columns: 24px 32px minmax(0, 1fr);
   gap: var(--space-2);
@@ -729,6 +730,8 @@ button:focus-visible {
 }
 
 .task-card h3 {
+  min-height: 32px;
+  padding-right: 36px;
   overflow-wrap: anywhere;
   font-size: 14px;
   line-height: 1.35;
@@ -774,6 +777,12 @@ button:focus-visible {
 .priority.low {
   color: var(--support);
   background: var(--support-soft);
+}
+
+.task-detail-button {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
 }
 
 .detail-layer {
@@ -1000,6 +1009,11 @@ button:focus-visible {
 
   .task-card {
     grid-template-columns: 40px 40px minmax(0, 1fr);
+  }
+
+  .task-card h3 {
+    min-height: 40px;
+    padding-right: 44px;
   }
 
   .select-task {
