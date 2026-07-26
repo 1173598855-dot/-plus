@@ -184,13 +184,28 @@ describe('TaskWorkspace', () => {
     expect(screen.queryByText('任务管理库第一篇文档')).not.toBeInTheDocument();
   });
 
-  it('opens the task detail panel when a board card is selected', async () => {
+  it('opens the detail drawer from a board card without squeezing the task canvas', async () => {
     const user = userEvent.setup();
     render(<TaskWorkspace />);
+
+    expect(screen.queryByLabelText('任务详情')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('任务画布')).not.toHaveClass('detail-collapsed');
 
     await user.click(screen.getByText('任务管理库第一篇文档'));
 
     expect(screen.getByLabelText('任务详情')).toBeInTheDocument();
+    expect(screen.getByLabelText('详情标题')).toHaveValue('任务管理库第一篇文档');
+    expect(screen.getByLabelText('任务详情层')).toBeInTheDocument();
+  });
+
+  it('keeps the selected task when the detail drawer is closed and reopened', async () => {
+    const user = userEvent.setup();
+    render(<TaskWorkspace />);
+
+    await user.click(screen.getByText('任务管理库第一篇文档'));
+    await user.click(screen.getByRole('button', { name: '关闭详情面板' }));
+    await user.click(screen.getByRole('button', { name: '显示详情' }));
+
     expect(screen.getByLabelText('详情标题')).toHaveValue('任务管理库第一篇文档');
   });
 
@@ -258,6 +273,7 @@ describe('TaskWorkspace', () => {
     render(<TaskWorkspace />);
 
     await user.click(screen.getByRole('button', { name: '完成' }));
+    await user.click(screen.getByRole('button', { name: '显示详情' }));
 
     const detail = screen.getByLabelText('任务详情');
     expect(within(detail).getByText('还没有已完成的任务可查看。')).toBeInTheDocument();
@@ -333,6 +349,7 @@ describe('TaskWorkspace', () => {
     const user = userEvent.setup();
     render(<TaskWorkspace />);
 
+    await user.click(screen.getByText('整理本周重点任务'));
     expect(screen.getByLabelText('任务详情')).toBeInTheDocument();
     expect(screen.getByLabelText('详情标题')).toBeInTheDocument();
 
@@ -351,6 +368,7 @@ describe('TaskWorkspace', () => {
     const user = userEvent.setup();
     render(<TaskWorkspace />);
 
+    await user.click(screen.getByText('整理本周重点任务'));
     await user.click(screen.getByRole('button', { name: '关闭详情面板' }));
 
     expect(screen.queryByLabelText('任务详情')).not.toBeInTheDocument();
@@ -441,16 +459,19 @@ describe('TaskWorkspace', () => {
 
     await user.click(screen.getByRole('button', { name: '切换完成：等待反馈：下一步是否加入番茄钟' }));
     await user.click(screen.getByRole('button', { name: '完成' }));
+    await user.click(screen.getByText('等待反馈：下一步是否加入番茄钟'));
 
     expect(screen.getByLabelText('详情标题')).toHaveValue('等待反馈：下一步是否加入番茄钟');
   });
 
-  it('labels toolbar filters and detail fields for assistive technology', () => {
+  it('labels toolbar filters and detail fields for assistive technology', async () => {
+    const user = userEvent.setup();
     render(<TaskWorkspace />);
 
     expect(screen.getByLabelText('按状态筛选')).toBeInTheDocument();
     expect(screen.getByLabelText('按优先级筛选')).toBeInTheDocument();
     expect(screen.getByLabelText('按日期筛选')).toBeInTheDocument();
+    await user.click(screen.getByText('整理本周重点任务'));
     expect(screen.getByLabelText('详情标题')).toBeInTheDocument();
     expect(screen.getByLabelText('详情备注')).toBeInTheDocument();
   });
@@ -469,7 +490,7 @@ describe('TaskWorkspace', () => {
     expect(screen.getByLabelText('搜索任务')).toHaveFocus();
 
     await user.keyboard('{Escape}n');
-    expect(screen.getByLabelText('任务标题')).toHaveFocus();
+    await waitFor(() => expect(screen.getByLabelText('任务标题')).toHaveFocus());
 
     await user.keyboard('{Escape}2');
     expect(screen.getByLabelText('任务列表')).toBeInTheDocument();

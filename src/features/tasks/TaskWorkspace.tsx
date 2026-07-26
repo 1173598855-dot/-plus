@@ -30,7 +30,7 @@ export function TaskWorkspace() {
   const [viewMode, setViewMode] = useState<TaskViewMode>('board');
   const [selectedId, setSelectedId] = useState<string>('');
   const [hideCompleted, setHideCompleted] = useState(false);
-  const [showDetail, setShowDetail] = useState(true);
+  const [showDetail, setShowDetail] = useState(false);
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
   const [pendingImport, setPendingImport] = useState<Task[]>([]);
   const [message, setMessage] = useState('');
@@ -395,7 +395,7 @@ export function TaskWorkspace() {
           onMobileFiltersExpandedChange={setIsMobileFiltersExpanded}
         />
 
-        <div className={`content-grid ${showDetail ? '' : 'detail-collapsed'}`}>
+        <div className="content-grid" aria-label="任务画布">
           <TaskViews
             viewMode={viewMode}
             filteredTasks={filteredTasks}
@@ -408,7 +408,6 @@ export function TaskWorkspace() {
             dragOverStatus={dragOverStatus}
             hasActiveFilters={hasActiveFilters}
             onClearFilters={clearFilters}
-            onSelectTask={setSelectedId}
             onToggleTaskSelection={toggleTaskSelection}
             onToggleDone={toggleDone}
             onOpenDetail={(task) => {
@@ -424,7 +423,10 @@ export function TaskWorkspace() {
             onColumnDrop={handleColumnDrop}
           />
 
-          {showDetail && (
+        </div>
+        {showDetail && (
+          <div className="detail-layer" aria-label="任务详情层">
+            <div className="detail-scrim" aria-hidden="true" onClick={() => setShowDetail(false)} />
             <TaskDetailPanel
               task={selectedTask}
               emptyMessage={getDetailEmptyStateMessage(visibleDetailLabel)}
@@ -432,8 +434,8 @@ export function TaskWorkspace() {
               onRemove={removeTask}
               onClose={() => setShowDetail(false)}
             />
-          )}
-        </div>
+          </div>
+        )}
       </section>
     </main>
   );

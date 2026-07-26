@@ -19,7 +19,6 @@ export interface TaskViewsProps {
   dragOverStatus: TaskStatus | '';
   hasActiveFilters: boolean;
   onClearFilters: () => void;
-  onSelectTask: (taskId: string) => void;
   onToggleTaskSelection: (taskId: string) => void;
   onToggleDone: (task: Task) => void;
   onOpenDetail: (task: Task) => void;
@@ -44,7 +43,6 @@ export function TaskViews({
   dragOverStatus,
   hasActiveFilters,
   onClearFilters,
-  onSelectTask,
   onToggleTaskSelection,
   onToggleDone,
   onOpenDetail,
@@ -66,7 +64,7 @@ export function TaskViews({
         onDragEnd={onTaskDragEnd}
         onDragOver={(event) => onTaskDragOver(event, task.status)}
         onDrop={(event) => onTaskDrop(event, task)}
-        onClick={() => onSelectTask(task.id)}
+        onClick={() => onOpenDetail(task)}
       >
         <label className="select-task" onClick={(event) => event.stopPropagation()}>
           <input type="checkbox" aria-label={`选择任务：${task.title}`} checked={selectedTaskIds.includes(task.id)} onChange={() => onToggleTaskSelection(task.id)} />
@@ -130,7 +128,7 @@ export function TaskViews({
               <span />
             </div>
             {tasksToRender.map((task) => (
-              <article className={`table-row ${selectedTask?.id === task.id ? 'selected' : ''}`} key={task.id} onClick={() => onSelectTask(task.id)}>
+              <article className={`table-row ${selectedTask?.id === task.id ? 'selected' : ''}`} key={task.id} onClick={() => onOpenDetail(task)}>
                 <label className="select-task" onClick={(event) => event.stopPropagation()}>
                   <input type="checkbox" aria-label={`选择任务：${task.title}`} checked={selectedTaskIds.includes(task.id)} onChange={() => onToggleTaskSelection(task.id)} />
                 </label>
