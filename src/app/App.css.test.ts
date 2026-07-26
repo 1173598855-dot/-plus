@@ -94,4 +94,28 @@ describe('App.css', () => {
     expect(selectedRowRule).not.toContain('box-shadow');
     expect(selectedRowRule).toContain('outline: 2px solid var(--accent)');
   });
+
+  it('reserves a compact rail and full-width task canvas', () => {
+    expect(getGridTemplateColumns('.workspace')).toBe('280px minmax(0, 1fr)');
+    expect(getGridTemplateColumns('.metric-grid')).toBe('repeat(4, minmax(0, 1fr))');
+    expect(getGridTemplateColumns('.content-grid')).toBe('minmax(0, 1fr)');
+  });
+
+  it('keeps filter overflow inside the work band and details in an overlay layer', () => {
+    expect(getRuleBody('.workband-filters')).toContain('overflow-x: auto');
+    expect(getRuleBody('.detail-layer')).toContain('position: fixed');
+    expect(getRuleBody('.detail')).toContain('width: min(360px, calc(100vw - 32px))');
+  });
+
+  it('collapses optional controls on mobile without horizontal page overflow', () => {
+    const mobileBody = getMediaBody('(max-width: 720px)');
+    expect(getRuleBody('body')).toContain('overflow-x: hidden');
+    expect(getRuleBodyFromSource(mobileBody, '.filter-strip:not(.mobile-expanded)')).toContain('display: none');
+    expect(getRuleBodyFromSource(mobileBody, '.detail')).toContain('width: 100%');
+  });
+
+  it('keeps backup actions readable in the compact rail', () => {
+    const intermediateBody = getMediaBody('(max-width: 1180px)');
+    expect(getRuleBodyFromSource(intermediateBody, '.backup-actions')).toContain('grid-template-columns: 1fr');
+  });
 });
