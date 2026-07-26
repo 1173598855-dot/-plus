@@ -53,6 +53,7 @@ describe('TaskWorkspace', () => {
     const quickAdd = within(screen.getByLabelText('新建任务'));
 
     await user.type(quickAdd.getByLabelText('任务标题'), '个人任务系统');
+    await user.click(screen.getByRole('button', { name: '展开详细字段' }));
     await user.type(quickAdd.getByLabelText('预计用时（分钟）'), '45');
     await user.selectOptions(quickAdd.getByLabelText('精力类型'), 'high');
     await user.type(quickAdd.getByLabelText('项目'), '系统建设');
@@ -71,6 +72,31 @@ describe('TaskWorkspace', () => {
     expect(stored).toContain('"estimateMinutes":45');
     expect(stored).toContain('"energy":"high"');
     expect(stored).toContain('系统建设');
+  });
+
+  it('progressively discloses quick-add details', async () => {
+    const user = userEvent.setup();
+    render(<TaskWorkspace />);
+
+    expect(screen.getByLabelText('任务标题')).toBeInTheDocument();
+    expect(screen.queryByLabelText('任务备注')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '展开详细字段' }));
+    expect(screen.getByLabelText('任务备注')).toBeInTheDocument();
+    expect(screen.getByLabelText('任务状态')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '收起详细字段' }));
+    expect(screen.queryByLabelText('任务备注')).not.toBeInTheDocument();
+  });
+
+  it('expands quick add and focuses its title with the n shortcut', async () => {
+    const user = userEvent.setup();
+    render(<TaskWorkspace />);
+
+    await user.keyboard('n');
+
+    expect(await screen.findByLabelText('任务备注')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText('任务标题')).toHaveFocus());
   });
 
   it('hides completed tasks from the working views when the toggle is enabled', async () => {
@@ -309,6 +335,7 @@ describe('TaskWorkspace', () => {
     const quickAdd = within(screen.getByLabelText('新建任务'));
 
     await user.type(quickAdd.getByLabelText('任务标题'), '逾期发票订单');
+    await user.click(screen.getByRole('button', { name: '展开详细字段' }));
     await user.type(quickAdd.getByLabelText('截止日期'), '2026-07-02');
     await user.click(screen.getByRole('button', { name: /添加任务/ }));
     await user.click(screen.getByRole('button', { name: '今日' }));
