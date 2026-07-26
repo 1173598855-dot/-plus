@@ -80,13 +80,20 @@ describe('TaskWorkspace', () => {
 
     expect(screen.getByLabelText('任务标题')).toBeInTheDocument();
     expect(screen.queryByLabelText('任务备注')).not.toBeInTheDocument();
+    const toggle = screen.getByRole('button', { name: '展开详细字段' });
+    const detailsId = 'quick-add-fields';
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveAttribute('aria-controls', detailsId);
 
-    await user.click(screen.getByRole('button', { name: '展开详细字段' }));
+    await user.click(toggle);
     expect(screen.getByLabelText('任务备注')).toBeInTheDocument();
     expect(screen.getByLabelText('任务状态')).toBeInTheDocument();
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(document.getElementById(detailsId)).toHaveAttribute('id', detailsId);
 
     await user.click(screen.getByRole('button', { name: '收起详细字段' }));
     expect(screen.queryByLabelText('任务备注')).not.toBeInTheDocument();
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('expands quick add and focuses its title with the n shortcut', async () => {

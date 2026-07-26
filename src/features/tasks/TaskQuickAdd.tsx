@@ -74,14 +74,14 @@ export function TaskQuickAdd({
         <h2>{quickAddLabels.quickAddTitle}</h2>
         <div className="quick-capture-row">
           <input ref={titleInputRef} aria-label={quickAddLabels.title} value={draft.title} onChange={(event) => onDraftChange({ ...draft, title: event.target.value })} placeholder={quickAddLabels.placeholder} />
-          <button type="button" aria-label={isExpanded ? quickAddLabels.collapseDetails : quickAddLabels.expandDetails} title={isExpanded ? quickAddLabels.collapseDetails : quickAddLabels.expandDetails} onClick={() => onExpandedChange(!isExpanded)}>
+          <button type="button" aria-label={isExpanded ? quickAddLabels.collapseDetails : quickAddLabels.expandDetails} aria-expanded={isExpanded} aria-controls="quick-add-fields" title={isExpanded ? quickAddLabels.collapseDetails : quickAddLabels.expandDetails} onClick={() => onExpandedChange(!isExpanded)}>
             {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </button>
           <button className="primary" type="button" onClick={onAdd} disabled={!draft.title?.trim()}>
             <Plus size={16} /> {quickAddLabels.addTask}
           </button>
         </div>
-        {isExpanded && <div className="quick-add-fields">
+        {isExpanded && <div id="quick-add-fields" className="quick-add-fields">
           <textarea aria-label={quickAddLabels.notes} value={draft.notes} onChange={(event) => onDraftChange({ ...draft, notes: event.target.value })} placeholder={quickAddLabels.notesPlaceholder} />
           <div className="form-row">
             <select aria-label={quickAddLabels.status} value={draft.status} onChange={(event) => onDraftChange({ ...draft, status: event.target.value as TaskStatus })}>
