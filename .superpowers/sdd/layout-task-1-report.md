@@ -36,3 +36,12 @@ Status: DONE_WITH_CONCERNS
 - CSS regression suite: `npm test -- src/app/App.css.test.ts` passed: 3 passed.
 - Focused task workspace verification: `npm test -- src/features/tasks/TaskWorkspace.test.tsx -t "empty|contextual local artwork"` passed: 4 passed, 31 skipped.
 - Build verification: `npm run build` passed; TypeScript and Vite production build completed successfully.
+
+## Selected Row Shadow Fix (2026-07-26)
+
+- Rounded-corner review: the `999px` declarations belong to filter chips, column-count badges, and task metadata badges. They are semantic pill badges rather than cards, so the card-radius limit does not apply and they were intentionally unchanged.
+- RED: `npm test -- src/app/App.css.test.ts -t "non-shadow visible selection state"` failed as expected: 1 failed, 3 skipped. `.table-row.selected` contained `box-shadow`.
+- GREEN: after replacing the inset shadow with `outline: 2px solid var(--accent)`, the same command passed: 1 passed, 3 skipped.
+- CSS regression suite: `npm test -- src/app/App.css.test.ts` passed: 4 passed.
+- Full test suite: `npm test` passed: 5 test files and 59 tests passed.
+- Build verification: `npm run build` passed; TypeScript and Vite production build completed successfully.

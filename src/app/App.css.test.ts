@@ -87,4 +87,11 @@ describe('App.css', () => {
     expect(artworkRule).toContain('max-height: 128px');
     expect(artworkRule).toContain('object-fit: contain');
   });
+
+  it('uses a non-shadow visible selection state for list rows', () => {
+    const selectedRowRule = getRuleBody('.table-row.selected');
+
+    expect(selectedRowRule).not.toContain('box-shadow');
+    expect(selectedRowRule).toContain('outline: 2px solid var(--accent)');
+  });
 });
