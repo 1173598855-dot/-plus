@@ -5,7 +5,7 @@
   --surface-subtle: #edf1ef;
   --ink: #18201d;
   --muted: #59645f;
-  --muted-soft: #707a75;
+  --muted-soft: #6b756f;
   --line: #d7dedb;
   --line-strong: #bec9c4;
   --accent: #155e63;
@@ -15,7 +15,7 @@
   --danger: #a33a32;
   --danger-soft: #f5e3e0;
   --warning: #b54a2f;
-  --warning-soft: #f6e5df;
+  --warning-soft: #fff8f6;
   --radius-sm: 6px;
   --radius-md: 8px;
   --space-1: 4px;
@@ -233,6 +233,16 @@ input:focus,
 select:focus,
 textarea:focus,
 button:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(21, 94, 99, 0.16);
+}
+
+.search-box:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(21, 94, 99, 0.16);
+}
+
+.file-action:focus-within {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(21, 94, 99, 0.16);
 }
@@ -947,10 +957,15 @@ button:focus-visible {
   .workspace-status .clear-filter {
     grid-row: auto;
     grid-column: auto;
+    min-height: 40px;
   }
 
   .view-switch {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .view-switch button {
+    min-height: 40px;
   }
 
   .filter-strip:not(.mobile-expanded) {
@@ -983,6 +998,22 @@ button:focus-visible {
     grid-template-columns: 1fr;
   }
 
+  .task-card {
+    grid-template-columns: 40px 40px minmax(0, 1fr);
+  }
+
+  .select-task {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+  }
+
+  .icon-button {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+  }
+
   .board {
     grid-template-columns: 1fr;
     overflow: visible;
@@ -1010,7 +1041,7 @@ button:focus-visible {
   }
 
   .table-row {
-    grid-template-columns: 24px 36px minmax(0, 1fr);
+    grid-template-columns: 40px 40px minmax(0, 1fr);
     align-items: start;
   }
 

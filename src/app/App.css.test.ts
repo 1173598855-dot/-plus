@@ -60,6 +60,22 @@ function splitGridTracks(template: string): string[] {
   return tracks;
 }
 
+function getCssVariable(name: string): string {
+  return getRuleBody(':root').match(new RegExp(`${name}:\\s*(#[0-9a-fA-F]{6})\\s*;`))?.[1] ?? '';
+}
+
+function relativeLuminance(hex: string): number {
+  const channels = [hex.slice(1, 3), hex.slice(3, 5), hex.slice(5, 7)].map((channel) => Number.parseInt(channel, 16) / 255);
+  const [red, green, blue] = channels.map((channel) => (channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+}
+
+function contrastRatio(foreground: string, background: string): number {
+  const foregroundLuminance = relativeLuminance(foreground);
+  const backgroundLuminance = relativeLuminance(background);
+  return (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) / (Math.min(foregroundLuminance, backgroundLuminance) + 0.05);
+}
+
 describe('App.css', () => {
   it('keeps list table columns aligned with the rendered cells', () => {
     const headerColumns = getGridTemplateColumns('.table-head');
@@ -117,5 +133,41 @@ describe('App.css', () => {
   it('keeps backup actions readable in the compact rail', () => {
     const intermediateBody = getMediaBody('(max-width: 1180px)');
     expect(getRuleBodyFromSource(intermediateBody, '.backup-actions')).toContain('grid-template-columns: 1fr');
+  });
+
+  it('keeps mobile task controls at least 40px on both axes', () => {
+    const mobileBody = getMediaBody('(max-width: 720px)');
+    const viewButtonRule = getRuleBodyFromSource(mobileBody, '.view-switch button');
+    const selectTaskRule = getRuleBodyFromSource(mobileBody, '.select-task');
+    const iconButtonRule = getRuleBodyFromSource(mobileBody, '.icon-button');
+
+    expect(viewButtonRule).toContain('min-height: 40px');
+    expect(selectTaskRule).toContain('width: 40px');
+    expect(selectTaskRule).toContain('height: 40px');
+    expect(iconButtonRule).toContain('width: 40px');
+    expect(iconButtonRule).toContain('height: 40px');
+    expect(getRuleBodyFromSource(mobileBody, '.task-card')).toContain('grid-template-columns: 40px 40px minmax(0, 1fr)');
+    expect(getRuleBodyFromSource(mobileBody, '.table-row')).toContain('grid-template-columns: 40px 40px minmax(0, 1fr)');
+    expect(getRuleBodyFromSource(mobileBody, '.workspace-status .clear-filter')).toContain('min-height: 40px');
+  });
+
+  it('shows a visible focus ring on composite search and file controls', () => {
+    for (const selector of ['.search-box:focus-within', '.file-action:focus-within']) {
+      const focusRule = getRuleBody(selector);
+      expect(focusRule).toContain('border-color: var(--accent)');
+      expect(focusRule).toContain('box-shadow: 0 0 0 3px');
+    }
+  });
+
+  it('keeps secondary and warning text contrast at or above 4.5', () => {
+    const mutedSoft = getCssVariable('--muted-soft');
+    const warning = getCssVariable('--warning');
+    const warningSoft = getCssVariable('--warning-soft');
+    const mutedBackgrounds = [getCssVariable('--surface-raised'), getCssVariable('--surface-panel')];
+    const mutedWorstCase = Math.min(...mutedBackgrounds.map((background) => contrastRatio(mutedSoft, background)));
+    const warningWorstCase = contrastRatio(warning, warningSoft);
+
+    expect(mutedWorstCase).toBeGreaterThanOrEqual(4.5);
+    expect(warningWorstCase).toBeGreaterThanOrEqual(4.5);
   });
 });
