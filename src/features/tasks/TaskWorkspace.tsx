@@ -12,7 +12,7 @@ import { TaskQuickAdd } from './TaskQuickAdd';
 import { TaskToolbar } from './TaskToolbar';
 import type { TaskViewMode } from './TaskToolbar';
 import { TaskViews } from './TaskViews';
-import { dueFilterLabels, emptyMessages, labelsFromInput, priorityLabels, statusLabels, toolbarLabels } from './taskUiText';
+import { columnQuickAddLabels, dueFilterLabels, emptyMessages, labelsFromInput, priorityLabels, statusLabels, toolbarLabels } from './taskUiText';
 import type { Task, TaskDraft, TaskFilters, TaskPriority, TaskStatus } from './taskTypes';
 
 const storageKey = 'personal-task-manager.tasks.v1';
@@ -228,6 +228,14 @@ export function TaskWorkspace() {
     setSelectedId(task.id);
     setMessage(`已创建任务“${sanitizeHtml(task.title)}”。系统已持久化。`);
     resetDraft();
+  }
+
+  function addTaskToColumn(title: string, status: TaskStatus) {
+    if (!title.trim()) return;
+    const task = createTask({ title, status }, { id: createId(), now: nowIso() });
+    setTasks((current) => [task, ...current]);
+    setSelectedId(task.id);
+    setMessage(columnQuickAddLabels.created(statusLabels[status], task.title));
   }
 
   function patchTask(task: Task, patch: Partial<TaskDraft>) {
@@ -476,6 +484,7 @@ export function TaskWorkspace() {
             onColumnDragOver={handleColumnDragOver}
             onColumnDragLeave={handleColumnDragLeave}
             onColumnDrop={handleColumnDrop}
+            onAddTaskToColumn={addTaskToColumn}
           />
 
         </div>

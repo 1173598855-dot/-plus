@@ -1,10 +1,10 @@
-import { CheckCircle2, Circle, PanelRightOpen } from 'lucide-react';
-import type { DragEvent } from 'react';
+import { CheckCircle2, Circle, PanelRightOpen, Plus } from 'lucide-react';
+import { useState, type DragEvent, type FormEvent, type KeyboardEvent } from 'react';
 import { formatDate } from '../../lib/date';
 import { taskStatuses } from './taskDomain';
 import { TaskEmptyState, type EmptyStateVariant } from './TaskEmptyState';
 import type { TaskViewMode } from './TaskToolbar';
-import { emptyMessages, energyLabels, formatEstimate, priorityLabels, statusLabels } from './taskUiText';
+import { columnQuickAddLabels, emptyMessages, energyLabels, formatEstimate, priorityLabels, statusLabels } from './taskUiText';
 import type { Task, TaskGroups, TaskStatus } from './taskTypes';
 
 export interface TaskViewsProps {
@@ -29,6 +29,7 @@ export interface TaskViewsProps {
   onColumnDragOver: (event: DragEvent<HTMLElement>, status: TaskStatus) => void;
   onColumnDragLeave: () => void;
   onColumnDrop: (event: DragEvent<HTMLElement>, status: TaskStatus) => void;
+  onAddTaskToColumn: (title: string, status: TaskStatus) => void;
 }
 
 export function TaskViews({
@@ -53,7 +54,23 @@ export function TaskViews({
   onColumnDragOver,
   onColumnDragLeave,
   onColumnDrop,
+  onAddTaskToColumn,
 }: TaskViewsProps) {
+  const [columnDrafts, setColumnDrafts] = useState<Partial<Record<TaskStatus, string>>>({});
+
+  function submitColumnTask(event: FormEvent<HTMLFormElement>, status: TaskStatus) {
+    event.preventDefault();
+    const title = columnDrafts[status]?.trim() ?? '';
+    if (!title) return;
+
+    onAddTaskToColumn(title, status);
+    setColumnDrafts((current) => ({ ...current, [status]: '' }));
+  }
+
+  function preventCompositionSubmit(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'Enter' && event.nativeEvent.isComposing) event.preventDefault();
+  }
+
   function renderTaskCard(task: Task) {
     return (
       <article
@@ -213,6 +230,26 @@ export function TaskViews({
                 <span>{groups[status].length}</span>
               </div>
               <div className="task-stack">{[...groups[status]].sort((left, right) => left.sortOrder - right.sortOrder).map((task) => renderTaskCard(task))}</div>
+              {!hasActiveFilters && (
+                <form className="column-add" aria-label={columnQuickAddLabels.form(statusLabels[status])} onSubmit={(event) => submitColumnTask(event, status)}>
+                  <input
+                    type="text"
+                    placeholder={columnQuickAddLabels.placeholder}
+                    aria-label={columnQuickAddLabels.title(statusLabels[status])}
+                    value={columnDrafts[status] ?? ''}
+                    onChange={(event) => setColumnDrafts((current) => ({ ...current, [status]: event.target.value }))}
+                    onKeyDown={preventCompositionSubmit}
+                  />
+                  <button
+                    className="icon-button column-add-btn"
+                    type="submit"
+                    aria-label={columnQuickAddLabels.submit(statusLabels[status])}
+                    disabled={!(columnDrafts[status] ?? '').trim()}
+                  >
+                    <Plus size={14} />
+                  </button>
+                </form>
+              )}
             </div>
           ))}
         </section>

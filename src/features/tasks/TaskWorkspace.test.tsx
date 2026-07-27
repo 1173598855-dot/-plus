@@ -455,6 +455,80 @@ describe('TaskWorkspace', () => {
     expect(screen.getByText('已移动“整理本周重点任务”到已完成。')).toBeInTheDocument();
   });
 
+  it('creates a trimmed board column task with Enter, retaining focus and persistence', async () => {
+    const user = userEvent.setup();
+    render(<TaskWorkspace />);
+    const nextInput = screen.getByLabelText('下一步任务标题');
+
+    await user.type(nextInput, '  列内新任务  ');
+    await user.keyboard('{Enter}');
+
+    expect(nextInput).toHaveValue('');
+    expect(nextInput).toHaveFocus();
+    expect(within(screen.getByLabelText('下一步栏')).getByText('列内新任务')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('已在下一步创建任务“列内新任务”。');
+    expect(screen.queryByRole('dialog', { name: '任务详情' })).not.toBeInTheDocument();
+    await waitFor(() => expect(localStorage.getItem('personal-task-manager.tasks.v1')).toContain('列内新任务'));
+  });
+
+  it('keeps board column drafts independent and creates with the Plus button', async () => {
+    const user = userEvent.setup();
+    render(<TaskWorkspace />);
+    const nextInput = screen.getByLabelText('下一步任务标题');
+    const scheduledInput = screen.getByLabelText('已安排任务标题');
+
+    await user.type(nextInput, '下一步草稿');
+    await user.type(scheduledInput, '已安排草稿');
+    await user.click(screen.getByRole('button', { name: '添加到下一步' }));
+
+    expect(nextInput).toHaveValue('');
+    expect(scheduledInput).toHaveValue('已安排草稿');
+    expect(within(screen.getByLabelText('下一步栏')).getByText('下一步草稿')).toBeInTheDocument();
+  });
+
+  it('creates a completed board column task with a completedAt timestamp in storage', async () => {
+    const user = userEvent.setup();
+    render(<TaskWorkspace />);
+
+    await user.type(screen.getByLabelText('已完成任务标题'), '完成列新任务');
+    await user.click(screen.getByRole('button', { name: '添加到已完成' }));
+
+    await waitFor(() => {
+      const stored = JSON.parse(localStorage.getItem('personal-task-manager.tasks.v1') ?? '[]') as Array<{ title: string; completedAt: string }>;
+      expect(stored.find((task) => task.title === '完成列新任务')?.completedAt).not.toBe('');
+    });
+  });
+
+  it('does not create board column tasks from whitespace or composition Enter', async () => {
+    const user = userEvent.setup();
+    render(<TaskWorkspace />);
+    const nextInput = screen.getByLabelText('下一步任务标题');
+    const submit = screen.getByRole('button', { name: '添加到下一步' });
+
+    await user.type(nextInput, '   ');
+    expect(submit).toBeDisabled();
+    await user.keyboard('{Enter}');
+    expect(screen.queryByText('   ')).not.toBeInTheDocument();
+
+    await user.clear(nextInput);
+    await user.type(nextInput, '组合态任务');
+    fireEvent.keyDown(nextInput, { key: 'Enter', isComposing: true });
+    expect(screen.queryByText('组合态任务')).not.toBeInTheDocument();
+    expect(nextInput).toHaveValue('组合态任务');
+  });
+
+  it('hides board column forms while filtered and restores them after clearing filters', async () => {
+    const user = userEvent.setup();
+    render(<TaskWorkspace />);
+
+    expect(screen.getByRole('form', { name: '在下一步中新建任务' })).toBeInTheDocument();
+    await user.type(screen.getByLabelText('搜索任务'), '整理');
+    expect(screen.queryByRole('form', { name: '在下一步中新建任务' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '清空筛选' }));
+    expect(screen.getByRole('form', { name: '在下一步中新建任务' })).toBeInTheDocument();
+  });
+
   it('reorders tasks inside a board column with drag and drop', async () => {
     const user = userEvent.setup();
     render(<TaskWorkspace />);

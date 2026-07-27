@@ -80,6 +80,14 @@ export const quickAddLabels = {
   cancel: '取消导入',
 } as const;
 
+export const columnQuickAddLabels = {
+  form: (status: string) => `在${status}中新建任务`,
+  title: (status: string) => `${status}任务标题`,
+  submit: (status: string) => `添加到${status}`,
+  placeholder: '添加任务',
+  created: (status: string, title: string) => `已在${status}创建任务“${title}”。`,
+} as const;
+
 export const toolbarLabels = {
   mainPanel: '工作台',
   viewSwitch: '视图切换',
