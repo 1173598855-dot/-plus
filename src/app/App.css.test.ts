@@ -117,6 +117,31 @@ describe('App.css', () => {
     expect(getGridTemplateColumns('.content-grid')).toBe('minmax(0, 1fr)');
   });
 
+  it('preserves the full-height workbench around compact board columns', () => {
+    const boardStyles = appCss.slice(appCss.indexOf('.board {'), appCss.indexOf('@media (max-width: 1180px)'));
+    const mobileBody = getMediaBody('(max-width: 720px)');
+
+    expect(getRuleBody('.workspace')).toContain('min-height: 100dvh');
+    expect(getRuleBody('.rail')).toContain('max-height: 100dvh');
+    expect(getRuleBodyFromSource(boardStyles, '.column')).toContain('min-height: calc(100dvh - 178px)');
+    expect(getRuleBodyFromSource(mobileBody, '.detail')).toContain('min-height: 100dvh');
+  });
+
+  it('keeps board column quick add compact and touch accessible', () => {
+    const columnAddRule = getRuleBody('.column-add');
+    const inputRule = getRuleBody('.column-add input');
+    const buttonRule = getRuleBody('.column-add-btn');
+    const mobileBody = getMediaBody('(max-width: 720px)');
+
+    expect(columnAddRule).toContain('display: grid');
+    expect(columnAddRule).toContain('grid-template-columns: minmax(0, 1fr) 40px');
+    expect(columnAddRule).toContain('margin-top: var(--space-3)');
+    expect(inputRule).toContain('min-height: 40px');
+    expect(buttonRule).toContain('min-width: 40px');
+    expect(buttonRule).toContain('height: 40px');
+    expect(getRuleBodyFromSource(mobileBody, '.column-add input')).not.toContain('min-height: 32px');
+  });
+
   it('keeps filter overflow inside the work band and details in an overlay layer', () => {
     expect(getRuleBody('.workband-filters')).toContain('overflow-x: auto');
     expect(getRuleBody('.detail-layer')).toContain('position: fixed');

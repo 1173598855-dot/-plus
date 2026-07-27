@@ -688,6 +688,31 @@ button:focus-visible {
   gap: 10px;
 }
 
+.column-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 40px;
+  gap: 6px;
+  margin-top: var(--space-3);
+}
+
+.column-add input {
+  min-height: 40px;
+  padding: 7px 10px;
+  font-size: 13px;
+}
+
+.column-add-btn {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  color: var(--accent);
+}
+
+.column-add-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .task-card {
   position: relative;
   display: grid;
