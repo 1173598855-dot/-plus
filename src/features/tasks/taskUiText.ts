@@ -78,6 +78,10 @@ export const quickAddLabels = {
   replace: '替换当前任务',
   merge: '合并到当前任务',
   cancel: '取消导入',
+  recoveryTitle: '本地存储恢复',
+  downloadDamagedData: '下载损坏的原始数据',
+  retryStorage: '重试本地存储',
+  resetStorage: '使用当前任务重置本地存储',
 } as const;
 
 export const columnQuickAddLabels = {

@@ -5,6 +5,23 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { vi } from 'vitest';
 import { TaskWorkspace } from './TaskWorkspace';
 
+const storedTask = {
+  id: 'stored-task',
+  title: '已存储任务',
+  notes: '',
+  status: 'next',
+  priority: 'medium',
+  dueDate: '',
+  project: '',
+  labels: [],
+  createdAt: '2026-07-03T12:00:00.000Z',
+  updatedAt: '2026-07-03T12:00:00.000Z',
+  completedAt: '',
+  sortOrder: 1000,
+  estimateMinutes: 0,
+  energy: 'medium',
+};
+
 function createDataTransfer() {
   return {
     data: new Map<string, string>(),
@@ -73,6 +90,95 @@ describe('TaskWorkspace', () => {
     render(<TaskWorkspace />);
 
     expect(within(screen.getByLabelText('按日期筛选')).getAllByRole('option', { name: '全部日期' })).toHaveLength(1);
+  });
+
+  it.each(['{broken', JSON.stringify({ unexpected: true })])('renders recovery actions without overwriting invalid stored data', async (raw) => {
+    localStorage.setItem('personal-task-manager.tasks.v1', raw);
+
+    render(<TaskWorkspace />);
+
+    expect(screen.getByText('整理本周重点任务')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '下载损坏的原始数据' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '重试本地存储' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '使用当前任务重置本地存储' })).toBeInTheDocument();
+    await waitFor(() => expect(localStorage.getItem('personal-task-manager.tasks.v1')).toBe(raw));
+  });
+
+  it('downloads the damaged raw storage value', async () => {
+    const user = userEvent.setup();
+    const raw = '{broken';
+    const createObjectUrl = vi.fn((_blob: Blob) => 'blob:damaged');
+    const revokeObjectUrl = vi.fn();
+    const click = vi.fn();
+    localStorage.setItem('personal-task-manager.tasks.v1', raw);
+    vi.stubGlobal('URL', { createObjectURL: createObjectUrl, revokeObjectURL: revokeObjectUrl });
+    vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
+      const element = document.createElementNS('http://www.w3.org/1999/xhtml', tagName) as HTMLElement;
+      if (tagName === 'a') element.click = click;
+      return element;
+    });
+    render(<TaskWorkspace />);
+
+    await user.click(screen.getByRole('button', { name: '下载损坏的原始数据' }));
+
+    expect(createObjectUrl).toHaveBeenCalledWith(expect.any(Blob));
+    await expect((createObjectUrl.mock.calls[0][0] as Blob).text()).resolves.toBe(raw);
+    expect(click).toHaveBeenCalledOnce();
+    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:damaged');
+  });
+
+  it('retries storage and adopts a newly valid task snapshot', async () => {
+    const user = userEvent.setup();
+    localStorage.setItem('personal-task-manager.tasks.v1', '{broken');
+    render(<TaskWorkspace />);
+    localStorage.setItem('personal-task-manager.tasks.v1', JSON.stringify([{ ...storedTask, id: 'retry-task', title: '重试后的任务' }]));
+
+    await user.click(screen.getByRole('button', { name: '重试本地存储' }));
+
+    expect(screen.getByText('重试后的任务')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '下载损坏的原始数据' })).not.toBeInTheDocument();
+  });
+
+  it('explicitly resets damaged storage with the currently displayed tasks', async () => {
+    const user = userEvent.setup();
+    localStorage.setItem('personal-task-manager.tasks.v1', '{broken');
+    render(<TaskWorkspace />);
+
+    await user.click(screen.getByRole('button', { name: '使用当前任务重置本地存储' }));
+
+    await waitFor(() => expect(localStorage.getItem('personal-task-manager.tasks.v1')).toContain('seed-week-plan'));
+    expect(screen.queryByRole('button', { name: '下载损坏的原始数据' })).not.toBeInTheDocument();
+  });
+
+  it('resumes persistence after a confirmed recovery import replacement', async () => {
+    const user = userEvent.setup();
+    localStorage.setItem('personal-task-manager.tasks.v1', '{broken');
+    render(<TaskWorkspace />);
+    const file = new File([JSON.stringify([storedTask])], 'recovery.json', { type: 'application/json' });
+
+    await user.upload(screen.getByLabelText('导入任务 JSON'), file);
+    await user.click(await screen.findByRole('button', { name: '替换当前任务' }));
+
+    expect(screen.queryByRole('button', { name: '下载损坏的原始数据' })).not.toBeInTheDocument();
+    await waitFor(() => expect(localStorage.getItem('personal-task-manager.tasks.v1')).toContain('stored-task'));
+  });
+
+  it('mounts seed tasks when the local storage getter throws', () => {
+    const descriptor = Object.getOwnPropertyDescriptor(window, 'localStorage');
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      get() {
+        throw new Error('blocked');
+      },
+    });
+
+    try {
+      expect(() => render(<TaskWorkspace />)).not.toThrow();
+      expect(screen.getByText('整理本周重点任务')).toBeInTheDocument();
+    } finally {
+      if (descriptor) Object.defineProperty(window, 'localStorage', descriptor);
+      else delete (window as unknown as Record<string, unknown>).localStorage;
+    }
   });
 
   it('creates a task and persists it to localStorage', async () => {

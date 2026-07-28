@@ -13,6 +13,7 @@ export interface TaskQuickAddProps {
   isInert: boolean;
   message: string;
   pendingImportCount: number;
+  recoveryRaw: string | null;
   onDraftChange: (draft: TaskDraft) => void;
   onLabelInputChange: (value: string) => void;
   onExpandedChange: (isExpanded: boolean) => void;
@@ -22,6 +23,9 @@ export interface TaskQuickAddProps {
   onReplaceImport: () => void;
   onMergeImport: () => void;
   onCancelImport: () => void;
+  onDownloadRecovery: () => void;
+  onRetryStorage: () => void;
+  onResetStorage: () => void;
 }
 
 export function TaskQuickAdd({
@@ -33,6 +37,7 @@ export function TaskQuickAdd({
   isInert,
   message,
   pendingImportCount,
+  recoveryRaw,
   onDraftChange,
   onLabelInputChange,
   onExpandedChange,
@@ -42,6 +47,9 @@ export function TaskQuickAdd({
   onReplaceImport,
   onMergeImport,
   onCancelImport,
+  onDownloadRecovery,
+  onRetryStorage,
+  onResetStorage,
 }: TaskQuickAddProps) {
   return (
     <aside className="rail" aria-label={quickAddLabels.rail} inert={isInert || undefined}>
@@ -147,6 +155,19 @@ export function TaskQuickAdd({
             </button>
             <button className="clear-filter" type="button" onClick={onCancelImport}>
               {quickAddLabels.cancel}
+            </button>
+          </div>
+        )}
+        {recoveryRaw !== null && (
+          <div className="import-actions" aria-label={quickAddLabels.recoveryTitle}>
+            <button className="secondary-action" type="button" onClick={onDownloadRecovery}>
+              <Download size={16} /> {quickAddLabels.downloadDamagedData}
+            </button>
+            <button className="secondary-action" type="button" onClick={onRetryStorage}>
+              {quickAddLabels.retryStorage}
+            </button>
+            <button className="clear-filter" type="button" onClick={onResetStorage}>
+              {quickAddLabels.resetStorage}
             </button>
           </div>
         )}

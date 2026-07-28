@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { DragEvent } from 'react';
 import { nowIso, todayIso } from '../../lib/date';
 import { createId } from '../../lib/id';
-import { loadJson, saveJson } from '../../lib/storage';
+import { readJson, saveJson } from '../../lib/storage';
 import { createTask, deleteTask, filterTasks, groupTasksByStatus, moveTask, normalizeTasks, sortTasks, summarizeTasks, updateTask } from './taskDomain';
-import { exportTasksToJson, importTasksFromJson } from './taskBackup';
+import { decodeTaskArray, exportTasksToJson, importTasksFromJson } from './taskBackup';
 import { seedTasks } from './seedTasks';
 import { TaskBulkActions } from './TaskBulkActions';
 import { detailHeadingId, TaskDetailPanel } from './TaskDetailPanel';
@@ -17,6 +17,21 @@ import type { Task, TaskDraft, TaskFilters, TaskPriority, TaskStatus } from './t
 
 const storageKey = 'personal-task-manager.tasks.v1';
 
+interface TaskStorageState {
+  tasks: Task[];
+  recoveryRaw: string | null;
+}
+
+function readStoredTasks(): TaskStorageState {
+  const result = readJson<unknown>(storageKey);
+  if (result.status === 'success') {
+    const tasks = decodeTaskArray(result.value);
+    return tasks === undefined ? { tasks: normalizeTasks(seedTasks), recoveryRaw: result.raw } : { tasks, recoveryRaw: null };
+  }
+  if (result.status === 'invalid') return { tasks: normalizeTasks(seedTasks), recoveryRaw: result.raw };
+  return { tasks: normalizeTasks(seedTasks), recoveryRaw: null };
+}
+
 const emptyDraft: TaskDraft = { title: '', notes: '', status: 'inbox', priority: 'medium', dueDate: '', project: '', labels: [], estimateMinutes: 0, energy: 'medium' };
 
 const handledDropType = 'application/x-task-drop-handled';
@@ -24,7 +39,9 @@ const cardDropType = 'application/x-task-card-drop';
 const drawerFocusableSelector = 'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export function TaskWorkspace() {
-  const [tasks, setTasks] = useState<Task[]>(() => normalizeTasks(loadJson<Task[]>(storageKey, seedTasks)));
+  const [startup] = useState(readStoredTasks);
+  const [tasks, setTasks] = useState<Task[]>(startup.tasks);
+  const [recoveryRaw, setRecoveryRaw] = useState<string | null>(startup.recoveryRaw);
   const [draft, setDraft] = useState<TaskDraft>(emptyDraft);
   const [labelInput, setLabelInput] = useState('');
   const [filters, setFilters] = useState<TaskFilters>({ status: 'all', priority: 'all', due: 'all' });
@@ -49,12 +66,13 @@ export function TaskWorkspace() {
   const today = useMemo(() => todayIso(), []);
 
   useEffect(() => {
+    if (recoveryRaw !== null) return;
     try {
       saveJson(storageKey, tasks);
     } catch {
       setMessage('存储不可用，当前修改可能不会持久化。');
     }
-  }, [pendingImport.length, tasks]);
+  }, [recoveryRaw, tasks]);
 
   useEffect(() => {
     function isTypingTarget(target: EventTarget | null) {
@@ -299,6 +317,29 @@ export function TaskWorkspace() {
     setMessage('任务已导出。');
   }
 
+  function downloadRecoveryData() {
+    if (recoveryRaw === null) return;
+    const blob = new Blob([recoveryRaw], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `personal-tasks-damaged-${today}.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+  }
+
+  function retryStorage() {
+    const next = readStoredTasks();
+    setTasks(next.tasks);
+    setRecoveryRaw(next.recoveryRaw);
+  }
+
+  function resetStorage() {
+    setRecoveryRaw(null);
+  }
+
   async function importTasks(file: File | undefined) {
     if (!file) return;
     try {
@@ -313,6 +354,7 @@ export function TaskWorkspace() {
 
   function replaceTasksWithImport() {
     setTasks(pendingImport);
+    setRecoveryRaw(null);
     setSelectedTaskIds([]);
     setSelectedId(pendingImport[0]?.id ?? '');
     setMessage(`已替换为 ${pendingImport.length} 个任务。`);
@@ -324,6 +366,7 @@ export function TaskWorkspace() {
     const tasksToAdd = pendingImport.filter((task) => !existingIds.has(task.id));
     setTasks((current) => [...tasksToAdd, ...current]);
     setSelectedId(tasksToAdd[0]?.id ?? selectedId);
+    setRecoveryRaw(null);
     setMessage(`已合并 ${tasksToAdd.length} 个任务，跳过 ${pendingImport.length - tasksToAdd.length} 个重复任务。`);
     setPendingImport([]);
   }
@@ -419,6 +462,7 @@ export function TaskWorkspace() {
         isInert={showDetail}
         message={message}
         pendingImportCount={pendingImport.length}
+        recoveryRaw={recoveryRaw}
         onDraftChange={setDraft}
         onLabelInputChange={setLabelInput}
         onExpandedChange={setIsQuickAddExpanded}
@@ -428,6 +472,9 @@ export function TaskWorkspace() {
         onReplaceImport={replaceTasksWithImport}
         onMergeImport={mergeImportedTasks}
         onCancelImport={cancelImport}
+        onDownloadRecovery={downloadRecoveryData}
+        onRetryStorage={retryStorage}
+        onResetStorage={resetStorage}
       />
 
       <section className="main-panel" aria-label={toolbarLabels.mainPanel} inert={showDetail || undefined}>
