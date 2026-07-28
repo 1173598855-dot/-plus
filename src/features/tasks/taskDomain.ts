@@ -84,6 +84,11 @@ export function createTask(draft: TaskDraft, clock: TaskClock): Task {
   };
 }
 
+export function nextTaskSortOrder(tasks: Task[], status: TaskStatus): number {
+  const highestOrder = tasks.reduce((highest, task) => (task.status === status ? Math.max(highest, task.sortOrder) : highest), 0);
+  return highestOrder + sortOrderStep;
+}
+
 export function updateTask(task: Task, patch: TaskPatch, now: string): Task {
   const nextStatus = patch.status ?? task.status;
   const becameDone = task.status !== 'done' && nextStatus === 'done';
@@ -172,13 +177,11 @@ export function moveTask(tasks: Task[], taskId: string, status: TaskStatus, targ
     updateTask(taskToMove, { status }, now),
     ...targetTasks.slice(boundedIndex),
   ];
-  const orders = new Map(reorderedTargetTasks.map((task, index) => [task.id, (index + 1) * sortOrderStep]));
+  const reorderedById = new Map(
+    reorderedTargetTasks.map((task, index) => [task.id, { ...task, sortOrder: (index + 1) * sortOrderStep }]),
+  );
 
-  return normalizedTasks.map((task) => {
-    const movedTask = reorderedTargetTasks.find((item) => item.id === task.id);
-    const nextTask = movedTask ?? task;
-    return orders.has(task.id) ? { ...nextTask, sortOrder: orders.get(task.id) ?? nextTask.sortOrder } : nextTask;
-  });
+  return normalizedTasks.map((task) => reorderedById.get(task.id) ?? task);
 }
 
 export function summarizeTasks(tasks: Task[], today: string) {

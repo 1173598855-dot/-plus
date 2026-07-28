@@ -188,6 +188,7 @@ export const operationMessages = {
   tasksDeleted: (count: number) => `已删除 ${count} 个任务。`,
   exported: '任务已导出。',
   importReady: (count: number) => `准备导入 ${count} 个任务，请选择替换或合并。`,
+  importTooLarge: '导入文件不能超过 5 MiB。',
   importFailed: '导入失败。',
   importReplaced: (count: number) => `已替换为 ${count} 个任务。`,
   importMerged: (added: number, skipped: number) => `已合并 ${added} 个任务，跳过 ${skipped} 个重复任务。`,

@@ -12,7 +12,7 @@ export interface TaskQuickAddProps {
   isExpanded: boolean;
   isInert: boolean;
   message: string;
-  pendingImportCount: number;
+  hasPendingImport: boolean;
   recoveryRaw: string | null;
   onDraftChange: (draft: TaskDraft) => void;
   onLabelInputChange: (value: string) => void;
@@ -36,7 +36,7 @@ export function TaskQuickAdd({
   isExpanded,
   isInert,
   message,
-  pendingImportCount,
+  hasPendingImport,
   recoveryRaw,
   onDraftChange,
   onLabelInputChange,
@@ -137,7 +137,16 @@ export function TaskQuickAdd({
           </button>
           <label className="secondary-action file-action">
             <Upload size={16} /> {quickAddLabels.import}
-            <input aria-label={quickAddLabels.importInput} type="file" accept="application/json,.json" onChange={(event) => void onImport(event.target.files?.[0])} />
+            <input
+              aria-label={quickAddLabels.importInput}
+              type="file"
+              accept="application/json,.json"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = '';
+                void onImport(file);
+              }}
+            />
           </label>
         </div>
         {message && (
@@ -145,7 +154,7 @@ export function TaskQuickAdd({
             {message}
           </p>
         )}
-        {pendingImportCount > 0 && (
+        {hasPendingImport && (
           <div className="import-actions" aria-label={quickAddLabels.importTitle}>
             <button className="secondary-action" type="button" onClick={onReplaceImport}>
               {quickAddLabels.replace}

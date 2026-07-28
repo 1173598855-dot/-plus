@@ -36,6 +36,14 @@ function createDataTransfer() {
   };
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((complete) => {
+    resolve = complete;
+  });
+  return { promise, resolve };
+}
+
 describe('TaskWorkspace', () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] });
@@ -571,6 +579,32 @@ describe('TaskWorkspace', () => {
     expect(screen.getByText('已移动“整理本周重点任务”到已完成。')).toBeInTheDocument();
   });
 
+  it('appends a filtered column drop after every task in the full target column', async () => {
+    const user = userEvent.setup();
+    render(<TaskWorkspace />);
+    await user.type(screen.getByLabelText('下一步任务标题'), '可见目标任务');
+    await user.keyboard('{Enter}');
+    await user.type(screen.getByLabelText('下一步任务标题'), '隐藏目标任务');
+    await user.keyboard('{Enter}');
+    await user.type(screen.getByLabelText('等待中任务标题'), '可见移动任务');
+    await user.keyboard('{Enter}');
+    await user.type(screen.getByLabelText('搜索任务'), '可见');
+
+    const dataTransfer = createDataTransfer();
+    const nextColumn = screen.getByLabelText('下一步栏');
+    const waitingColumn = screen.getByLabelText('等待中栏');
+    const taskCard = within(waitingColumn).getByText('可见移动任务').closest('article');
+    expect(taskCard).not.toBeNull();
+
+    fireEvent.dragStart(taskCard as HTMLElement, { dataTransfer });
+    fireEvent.dragOver(nextColumn, { dataTransfer });
+    fireEvent.drop(nextColumn, { dataTransfer });
+    await user.click(screen.getByRole('button', { name: '清空筛选' }));
+
+    const titles = within(nextColumn).getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent);
+    expect(titles.at(-1)).toBe('可见移动任务');
+  });
+
   it('creates a trimmed board column task with Enter, retaining focus and persistence', async () => {
     const user = userEvent.setup();
     render(<TaskWorkspace />);
@@ -585,6 +619,22 @@ describe('TaskWorkspace', () => {
     expect(screen.getByRole('status')).toHaveTextContent('已在下一步创建任务“列内新任务”。');
     expect(screen.queryByRole('dialog', { name: '任务详情' })).not.toBeInTheDocument();
     await waitFor(() => expect(localStorage.getItem('personal-task-manager.tasks.v1')).toContain('列内新任务'));
+  });
+
+  it('appends a column task after an imported task with a high sort order', async () => {
+    const user = userEvent.setup();
+    localStorage.setItem('personal-task-manager.tasks.v1', JSON.stringify([
+      { ...storedTask, id: 'high-order-task', title: '已导入高位任务', sortOrder: Number.MAX_VALUE },
+    ]));
+    render(<TaskWorkspace />);
+
+    await user.type(screen.getByLabelText('下一步任务标题'), '列尾新任务');
+    await user.keyboard('{Enter}');
+
+    const titles = within(screen.getByLabelText('下一步栏'))
+      .getAllByRole('heading', { level: 3 })
+      .map((heading) => heading.textContent);
+    expect(titles.at(-1)).toBe('列尾新任务');
   });
 
   it('keeps board column drafts independent and creates with the Plus button', async () => {
@@ -967,6 +1017,99 @@ describe('TaskWorkspace', () => {
 
     expect(screen.getByText('导入后的任务')).toBeInTheDocument();
     expect(screen.queryByText('整理本周重点任务')).not.toBeInTheDocument();
+  });
+
+  it('confirms and replaces the task library with an empty backup', async () => {
+    const user = userEvent.setup();
+    render(<TaskWorkspace />);
+    const file = new File([
+      JSON.stringify({ version: 1, exportedAt: '2026-07-03T09:00:00.000Z', tasks: [] }),
+    ], 'empty-tasks.json', { type: 'application/json' });
+
+    await user.upload(screen.getByLabelText('导入任务 JSON'), file);
+
+    expect(await screen.findByText('准备导入 0 个任务，请选择替换或合并。')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '替换当前任务' }));
+
+    expect(screen.getByText('还没有任务。')).toBeInTheDocument();
+    expect(screen.queryByText('整理本周重点任务')).not.toBeInTheDocument();
+  });
+
+  it('keeps the latest selected import when an earlier file finishes last', async () => {
+    const user = userEvent.setup();
+    render(<TaskWorkspace />);
+    const firstRead = createDeferred<string>();
+    const secondRead = createDeferred<string>();
+    const firstFile = new File([], 'first.json', { type: 'application/json' });
+    const secondFile = new File([], 'second.json', { type: 'application/json' });
+    vi.spyOn(firstFile, 'text').mockReturnValue(firstRead.promise);
+    vi.spyOn(secondFile, 'text').mockReturnValue(secondRead.promise);
+    const input = screen.getByLabelText('导入任务 JSON');
+
+    await user.upload(input, firstFile);
+    await user.upload(input, secondFile);
+    await act(async () => {
+      secondRead.resolve(JSON.stringify([{ ...storedTask, id: 'second-import', title: '后选文件任务' }]));
+      await secondRead.promise;
+    });
+    expect(await screen.findByRole('button', { name: '替换当前任务' })).toBeInTheDocument();
+
+    await act(async () => {
+      firstRead.resolve(JSON.stringify([{ ...storedTask, id: 'first-import', title: '先选文件任务' }]));
+      await firstRead.promise;
+    });
+    await user.click(screen.getByRole('button', { name: '替换当前任务' }));
+
+    expect(screen.getByText('后选文件任务')).toBeInTheDocument();
+    expect(screen.queryByText('先选文件任务')).not.toBeInTheDocument();
+  });
+
+  it('hides an earlier import confirmation while the latest file is loading', async () => {
+    const user = userEvent.setup();
+    render(<TaskWorkspace />);
+    const latestRead = createDeferred<string>();
+    const firstFile = new File([JSON.stringify([storedTask])], 'first-ready.json', { type: 'application/json' });
+    const latestFile = new File([], 'latest-loading.json', { type: 'application/json' });
+    vi.spyOn(latestFile, 'text').mockReturnValue(latestRead.promise);
+    const input = screen.getByLabelText('导入任务 JSON');
+
+    await user.upload(input, firstFile);
+    expect(await screen.findByRole('button', { name: '替换当前任务' })).toBeInTheDocument();
+
+    await user.upload(input, latestFile);
+
+    expect(screen.queryByRole('button', { name: '替换当前任务' })).not.toBeInTheDocument();
+    await act(async () => {
+      latestRead.resolve(JSON.stringify([{ ...storedTask, id: 'latest-import', title: '最新文件任务' }]));
+      await latestRead.promise;
+    });
+    expect(await screen.findByRole('button', { name: '替换当前任务' })).toBeInTheDocument();
+  });
+
+  it('clears the import input so the same file can be selected again', async () => {
+    const user = userEvent.setup();
+    render(<TaskWorkspace />);
+    const input = screen.getByLabelText('导入任务 JSON') as HTMLInputElement;
+    const file = new File([JSON.stringify([storedTask])], 'same-tasks.json', { type: 'application/json' });
+
+    await user.upload(input, file);
+
+    expect(await screen.findByRole('button', { name: '替换当前任务' })).toBeInTheDocument();
+    expect(input.files).toHaveLength(0);
+    expect(input).toHaveValue('');
+  });
+
+  it('rejects imports larger than 5 MiB before reading the file', async () => {
+    const user = userEvent.setup();
+    render(<TaskWorkspace />);
+    const file = new File(['[]'], 'large-tasks.json', { type: 'application/json' });
+    Object.defineProperty(file, 'size', { value: 5 * 1024 * 1024 + 1 });
+    const readFile = vi.spyOn(file, 'text');
+
+    await user.upload(screen.getByLabelText('导入任务 JSON'), file);
+
+    expect(await screen.findByRole('status')).toHaveTextContent('导入文件不能超过 5 MiB。');
+    expect(readFile).not.toHaveBeenCalled();
   });
 
   it('can merge imported tasks without duplicating existing ids', async () => {

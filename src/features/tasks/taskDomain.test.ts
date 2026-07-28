@@ -6,6 +6,7 @@ import {
   groupTasksByStatus,
   sortTasks,
   moveTask,
+  nextTaskSortOrder,
   summarizeTasks,
   updateTask,
 } from './taskDomain';
@@ -162,5 +163,15 @@ describe('taskDomain', () => {
       status: 'next',
       updatedAt: '2026-07-03T10:00:00.000Z',
     });
+  });
+
+  it('returns a sort order after the highest task in the target status', () => {
+    const tasks: Task[] = [
+      { ...baseTask, id: 'target', status: 'next', sortOrder: 9000000000 },
+      { ...baseTask, id: 'other-status', status: 'waiting', sortOrder: 12000000000 },
+    ];
+
+    expect(nextTaskSortOrder(tasks, 'next')).toBe(9000001000);
+    expect(nextTaskSortOrder(tasks, 'inbox')).toBe(1000);
   });
 });

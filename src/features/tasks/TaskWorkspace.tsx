@@ -3,7 +3,7 @@ import type { DragEvent } from 'react';
 import { nowIso, todayIso } from '../../lib/date';
 import { createId } from '../../lib/id';
 import { readJson, saveJson } from '../../lib/storage';
-import { createTask, deleteTask, filterTasks, groupTasksByStatus, moveTask, normalizeTasks, sortTasks, summarizeTasks, updateTask } from './taskDomain';
+import { createTask, deleteTask, filterTasks, groupTasksByStatus, moveTask, nextTaskSortOrder, normalizeTasks, sortTasks, summarizeTasks, updateTask } from './taskDomain';
 import { decodeTaskArray, exportTasksToJson, importTasksFromJson } from './taskBackup';
 import { seedTasks } from './seedTasks';
 import { TaskBulkActions } from './TaskBulkActions';
@@ -16,6 +16,7 @@ import { columnQuickAddLabels, dueFilterLabels, emptyMessages, labelsFromInput, 
 import type { Task, TaskDraft, TaskFilters, TaskPriority, TaskStatus } from './taskTypes';
 
 const storageKey = 'personal-task-manager.tasks.v1';
+const maxImportBytes = 5 * 1024 * 1024;
 
 interface TaskStorageState {
   tasks: Task[];
@@ -50,7 +51,7 @@ export function TaskWorkspace() {
   const [hideCompleted, setHideCompleted] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
-  const [pendingImport, setPendingImport] = useState<Task[]>([]);
+  const [pendingImport, setPendingImport] = useState<Task[] | null>(null);
   const [message, setMessage] = useState('');
   const [draggedTaskId, setDraggedTaskId] = useState('');
   const [dragOverStatus, setDragOverStatus] = useState<TaskStatus | ''>('');
@@ -63,7 +64,12 @@ export function TaskWorkspace() {
   const detailLayerRef = useRef<HTMLDivElement>(null);
   const detailCloseButtonRef = useRef<HTMLButtonElement>(null);
   const detailTriggerRef = useRef<HTMLElement | null>(null);
+  const importRequestRef = useRef(0);
   const [today, setToday] = useState(todayIso);
+
+  useEffect(() => () => {
+    importRequestRef.current += 1;
+  }, []);
 
   useEffect(() => {
     let midnightTimer = 0;
@@ -275,11 +281,15 @@ export function TaskWorkspace() {
   }
 
   function addTaskToColumn(title: string, status: TaskStatus) {
-    if (!title.trim()) return;
-    const task = createTask({ title, status }, { id: createId(), now: nowIso() });
-    setTasks((current) => [task, ...current]);
-    setSelectedId(task.id);
-    setMessage(columnQuickAddLabels.created(statusLabels[status], task.title));
+    const normalizedTitle = title.trim();
+    if (!normalizedTitle) return;
+    const clock = { id: createId(), now: nowIso() };
+    setTasks((current) => [
+      ...current,
+      createTask({ title: normalizedTitle, status, sortOrder: nextTaskSortOrder(current, status) }, clock),
+    ]);
+    setSelectedId(clock.id);
+    setMessage(columnQuickAddLabels.created(statusLabels[status], normalizedTitle));
   }
 
   function patchTask(task: Task, patch: Partial<TaskDraft>) {
@@ -367,38 +377,51 @@ export function TaskWorkspace() {
   }
 
   async function importTasks(file: File | undefined) {
+    const requestId = ++importRequestRef.current;
     if (!file) return;
+    setPendingImport(null);
+    setMessage('');
+    if (file.size > maxImportBytes) {
+      setMessage(operationMessages.importTooLarge);
+      return;
+    }
     try {
-      const importedTasks = importTasksFromJson(await file.text());
+      const raw = await file.text();
+      if (requestId !== importRequestRef.current) return;
+      const importedTasks = importTasksFromJson(raw);
       setPendingImport(importedTasks);
       setMessage(operationMessages.importReady(importedTasks.length));
     } catch (error) {
-      setPendingImport([]);
+      if (requestId !== importRequestRef.current) return;
+      setPendingImport(null);
       setMessage(error instanceof Error ? error.message : operationMessages.importFailed);
     }
   }
 
   function replaceTasksWithImport() {
+    if (pendingImport === null) return;
     setTasks(pendingImport);
     setRecoveryRaw(null);
     setSelectedTaskIds([]);
     setSelectedId(pendingImport[0]?.id ?? '');
     setMessage(operationMessages.importReplaced(pendingImport.length));
-    setPendingImport([]);
+    setPendingImport(null);
   }
 
   function mergeImportedTasks() {
+    if (pendingImport === null) return;
     const existingIds = new Set(tasks.map((task) => task.id));
     const tasksToAdd = pendingImport.filter((task) => !existingIds.has(task.id));
     setTasks((current) => [...tasksToAdd, ...current]);
     setSelectedId(tasksToAdd[0]?.id ?? selectedId);
     setRecoveryRaw(null);
     setMessage(operationMessages.importMerged(tasksToAdd.length, pendingImport.length - tasksToAdd.length));
-    setPendingImport([]);
+    setPendingImport(null);
   }
 
   function cancelImport() {
-    setPendingImport([]);
+    importRequestRef.current += 1;
+    setPendingImport(null);
     setMessage(operationMessages.importCanceled);
   }
 
@@ -439,8 +462,10 @@ export function TaskWorkspace() {
     if (!task || task.status === status) return;
 
     const updatedAt = nowIso();
-    const targetIndex = groups[status].length;
-    setTasks((current) => moveTask(current, taskId, status, targetIndex, updatedAt));
+    setTasks((current) => {
+      const targetIndex = current.filter((item) => item.status === status && item.id !== taskId).length;
+      return moveTask(current, taskId, status, targetIndex, updatedAt);
+    });
     setSelectedId(taskId);
     setMessage(operationMessages.taskMovedToStatus(task.title, statusLabels[status]));
   }
@@ -487,7 +512,7 @@ export function TaskWorkspace() {
         isExpanded={isQuickAddExpanded}
         isInert={showDetail}
         message={message}
-        pendingImportCount={pendingImport.length}
+        hasPendingImport={pendingImport !== null}
         recoveryRaw={recoveryRaw}
         onDraftChange={setDraft}
         onLabelInputChange={setLabelInput}
