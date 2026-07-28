@@ -63,7 +63,37 @@ export function TaskWorkspace() {
   const detailLayerRef = useRef<HTMLDivElement>(null);
   const detailCloseButtonRef = useRef<HTMLButtonElement>(null);
   const detailTriggerRef = useRef<HTMLElement | null>(null);
-  const today = useMemo(() => todayIso(), []);
+  const [today, setToday] = useState(todayIso);
+
+  useEffect(() => {
+    let midnightTimer = 0;
+
+    function scheduleMidnightRefresh() {
+      window.clearTimeout(midnightTimer);
+      const now = new Date();
+      const nextMidnight = new Date(now);
+      nextMidnight.setHours(24, 0, 0, 0);
+      midnightTimer = window.setTimeout(refreshToday, nextMidnight.getTime() - now.getTime());
+    }
+
+    function refreshToday() {
+      setToday(todayIso());
+      scheduleMidnightRefresh();
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible') refreshToday();
+    }
+
+    scheduleMidnightRefresh();
+    window.addEventListener('focus', refreshToday);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.clearTimeout(midnightTimer);
+      window.removeEventListener('focus', refreshToday);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
 
   useEffect(() => {
     if (recoveryRaw !== null) return;

@@ -1,4 +1,4 @@
-﻿import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -691,6 +691,21 @@ describe('TaskWorkspace', () => {
 
     await user.click(screen.getByRole('button', { name: '看板' }));
     expect(screen.getByLabelText('状态看板')).toBeInTheDocument();
+  });
+
+  it('refreshes the today view at local midnight without remounting', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 3, 23, 59, 59, 900));
+    render(<TaskWorkspace />);
+
+    fireEvent.click(screen.getByRole('button', { name: '今日' }));
+    expect(screen.queryByText('任务管理库第一篇文档')).not.toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+
+    expect(screen.getByText('任务管理库第一篇文档')).toBeInTheDocument();
   });
 
   it('can collapse and restore the task detail panel', async () => {
