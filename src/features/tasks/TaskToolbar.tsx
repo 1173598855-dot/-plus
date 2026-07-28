@@ -92,7 +92,7 @@ export function TaskToolbar({
           )}
         </div>
         {showDetail ? (
-          <button className="icon-button" type="button" onClick={() => onShowDetailChange(false)} aria-label="隐藏详情">
+          <button className="icon-button" type="button" onClick={() => onShowDetailChange(false)} aria-label={detailLabels.hide}>
             <PanelRightClose size={16} />
           </button>
         ) : (
@@ -105,7 +105,7 @@ export function TaskToolbar({
           type="button"
           aria-expanded={isMobileFiltersExpanded}
           aria-controls="task-filter-strip"
-          aria-label={`${isMobileFiltersExpanded ? toolbarLabels.collapseFilters : toolbarLabels.expandFilters}（${activeFilterCount}）`}
+          aria-label={toolbarLabels.filterToggle(isMobileFiltersExpanded, activeFilterCount)}
           onClick={() => onMobileFiltersExpandedChange(!isMobileFiltersExpanded)}
         >
           <ListFilter size={16} />
@@ -118,7 +118,7 @@ export function TaskToolbar({
 
       <div id="task-filter-strip" className={`filter-strip workband-filters ${isMobileFiltersExpanded ? 'mobile-expanded' : ''}`} aria-label={toolbarLabels.filters}>
         <select aria-label={toolbarLabels.statusFilter} value={filters.status} onChange={(event) => onFiltersChange({ ...filters, status: event.target.value as TaskFilters['status'] })}>
-          <option value="all">全部状态</option>
+          <option value="all">{toolbarLabels.allStatuses}</option>
           {taskStatuses.map((status) => (
             <option key={status} value={status}>
               {statusLabels[status]}
@@ -126,7 +126,7 @@ export function TaskToolbar({
           ))}
         </select>
         <select aria-label={toolbarLabels.priority} value={filters.priority} onChange={(event) => onFiltersChange({ ...filters, priority: event.target.value as TaskFilters['priority'] })}>
-          <option value="all">全部优先级</option>
+          <option value="all">{toolbarLabels.allPriorities}</option>
           {Object.entries(priorityLabels).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
@@ -141,7 +141,7 @@ export function TaskToolbar({
           ))}
         </select>
         <select aria-label={toolbarLabels.project} value={filters.project} onChange={(event) => onFiltersChange({ ...filters, project: event.target.value })}>
-          <option value="">全部项目</option>
+          <option value="">{toolbarLabels.allProjects}</option>
           {projects.map((project) => (
             <option key={project} value={project}>
               {project}
@@ -149,7 +149,7 @@ export function TaskToolbar({
           ))}
         </select>
         <select aria-label={toolbarLabels.label} value={filters.label} onChange={(event) => onFiltersChange({ ...filters, label: event.target.value })}>
-          <option value="">全部标签</option>
+          <option value="">{toolbarLabels.allLabels}</option>
           {labelOptions.map((option) => (
             <option key={option} value={option}>
               {option}
@@ -157,8 +157,8 @@ export function TaskToolbar({
           ))}
         </select>
         {hideCompleted ? (
-          <button type="button" onClick={() => onHideCompletedChange(false)} aria-label="显示已完成任务">
-            显示已完成任务
+          <button type="button" onClick={() => onHideCompletedChange(false)} aria-label={toolbarLabels.showCompleted}>
+            {toolbarLabels.showCompleted}
           </button>
         ) : (
           <button type="button" onClick={() => onHideCompletedChange(true)} aria-label={toolbarLabels.hideCompleted}>

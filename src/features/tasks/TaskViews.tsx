@@ -4,7 +4,7 @@ import { formatDate } from '../../lib/date';
 import { taskStatuses } from './taskDomain';
 import { TaskEmptyState, type EmptyStateVariant } from './TaskEmptyState';
 import type { TaskViewMode } from './TaskToolbar';
-import { columnQuickAddLabels, emptyMessages, energyLabels, formatEstimate, priorityLabels, statusLabels } from './taskUiText';
+import { columnQuickAddLabels, emptyMessages, energyLabels, formatEstimate, priorityLabels, statusLabels, viewLabels } from './taskUiText';
 import type { Task, TaskGroups, TaskStatus } from './taskTypes';
 
 export interface TaskViewsProps {
@@ -84,12 +84,12 @@ export function TaskViews({
         onClick={() => onOpenDetail(task)}
       >
         <label className="select-task" onClick={(event) => event.stopPropagation()}>
-          <input type="checkbox" aria-label={`选择任务：${task.title}`} checked={selectedTaskIds.includes(task.id)} onChange={() => onToggleTaskSelection(task.id)} />
+          <input type="checkbox" aria-label={viewLabels.selectTask(task.title)} checked={selectedTaskIds.includes(task.id)} onChange={() => onToggleTaskSelection(task.id)} />
         </label>
         <button
           className="icon-button"
           type="button"
-          aria-label={`切换完成：${task.title}`}
+          aria-label={viewLabels.toggleDone(task.title)}
           onClick={(event) => {
             event.stopPropagation();
             onToggleDone(task);
@@ -99,7 +99,7 @@ export function TaskViews({
         </button>
         <div>
           <h3>{task.title}</h3>
-          <p>{task.notes || task.project || '没有备注或项目。'}</p>
+          <p>{task.notes || task.project || viewLabels.noNotesOrProject}</p>
           <div className="task-meta">
             <span className={`priority ${task.priority}`}>{priorityLabels[task.priority]}</span>
             <span>{formatDate(task.dueDate)}</span>
@@ -111,7 +111,7 @@ export function TaskViews({
         <button
           className="icon-button task-detail-button"
           type="button"
-          aria-label={`查看详情：${task.title}`}
+          aria-label={viewLabels.viewDetail(task.title)}
           onClick={(event) => {
             event.stopPropagation();
             onOpenDetail(task, event.currentTarget);
@@ -146,22 +146,22 @@ export function TaskViews({
             <div className="table-head" aria-hidden="true">
               <span />
               <span />
-              <span>任务</span>
-              <span>状态</span>
-              <span>优先级</span>
-              <span>日期</span>
-              <span>预计</span>
+              <span>{viewLabels.task}</span>
+              <span>{viewLabels.status}</span>
+              <span>{viewLabels.priority}</span>
+              <span>{viewLabels.date}</span>
+              <span>{viewLabels.estimate}</span>
               <span />
             </div>
             {tasksToRender.map((task) => (
               <article className={`table-row ${selectedTask?.id === task.id ? 'selected' : ''}`} key={task.id} onClick={() => onOpenDetail(task)}>
                 <label className="select-task" onClick={(event) => event.stopPropagation()}>
-                  <input type="checkbox" aria-label={`选择任务：${task.title}`} checked={selectedTaskIds.includes(task.id)} onChange={() => onToggleTaskSelection(task.id)} />
+                  <input type="checkbox" aria-label={viewLabels.selectTask(task.title)} checked={selectedTaskIds.includes(task.id)} onChange={() => onToggleTaskSelection(task.id)} />
                 </label>
                 <button
                   className="icon-button"
                   type="button"
-                  aria-label={`切换完成：${task.title}`}
+                  aria-label={viewLabels.toggleDone(task.title)}
                   onClick={(event) => {
                     event.stopPropagation();
                     onToggleDone(task);
@@ -171,7 +171,7 @@ export function TaskViews({
                 </button>
                 <div>
                   <strong>{task.title}</strong>
-                  <span>{task.notes || task.project || '没有备注或项目。'}</span>
+                  <span>{task.notes || task.project || viewLabels.noNotesOrProject}</span>
                 </div>
                 <span>{statusLabels[task.status]}</span>
                 <span className={`priority ${task.priority}`}>{priorityLabels[task.priority]}</span>
@@ -180,7 +180,7 @@ export function TaskViews({
                 <button
                   className="icon-button"
                   type="button"
-                  aria-label={`查看详情：${task.title}`}
+                  aria-label={viewLabels.viewDetail(task.title)}
                   onClick={(event) => {
                     event.stopPropagation();
                     onOpenDetail(task, event.currentTarget);
@@ -206,7 +206,7 @@ export function TaskViews({
   return (
     <>
       {viewMode === 'board' && (
-        <section className="board" aria-label="状态看板">
+        <section className="board" aria-label={viewLabels.board}>
           {filteredTasks.length === 0 && (
             <TaskEmptyState
               className="board-empty"
@@ -220,7 +220,7 @@ export function TaskViews({
             <div
               className={`column ${dragOverStatus === status ? 'drop-target' : ''}`}
               key={status}
-              aria-label={`${statusLabels[status]}栏`}
+              aria-label={viewLabels.column(statusLabels[status])}
               onDragOver={(event) => onColumnDragOver(event, status)}
               onDragLeave={onColumnDragLeave}
               onDrop={(event) => onColumnDrop(event, status)}
@@ -254,9 +254,9 @@ export function TaskViews({
           ))}
         </section>
       )}
-      {viewMode === 'list' && renderList(filteredTasks, '任务列表', 'board')}
-      {viewMode === 'today' && renderList(todayTasks, '今日任务', 'today')}
-      {viewMode === 'completed' && renderList(completedTasks, '已完成任务', 'completed')}
+      {viewMode === 'list' && renderList(filteredTasks, viewLabels.list, 'board')}
+      {viewMode === 'today' && renderList(todayTasks, viewLabels.today, 'today')}
+      {viewMode === 'completed' && renderList(completedTasks, viewLabels.completed, 'completed')}
     </>
   );
 }

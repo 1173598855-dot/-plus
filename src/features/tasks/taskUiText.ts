@@ -108,12 +108,26 @@ export const toolbarLabels = {
   project: '按项目筛选',
   label: '按标签筛选',
   hideCompleted: '隐藏已完成任务',
+  showCompleted: '显示已完成任务',
   due: '按日期筛选',
   statusFilter: '按状态筛选',
   priority: '按优先级筛选',
   filters: '任务筛选',
   expandFilters: '展开筛选',
   collapseFilters: '收起筛选',
+  allStatuses: '全部状态',
+  allPriorities: '全部优先级',
+  allProjects: '全部项目',
+  allLabels: '全部标签',
+  filterToggle: (isExpanded: boolean, count: number) => `${isExpanded ? '收起筛选' : '展开筛选'}（${count}）`,
+  searchFilter: (value: string) => `搜索：${value}`,
+  statusFilterValue: (value: string) => `状态：${value}`,
+  priorityFilter: (value: string) => `优先级：${value}`,
+  dueFilter: (value: string) => `日期：${value}`,
+  projectFilter: (value: string) => `项目：${value}`,
+  labelFilter: (value: string) => `标签：${value}`,
+  filteredStatus: (visible: number, total: number) => `已筛选 ${visible} / ${total} 个任务`,
+  allStatus: (total: number) => `全部 ${total} 个任务`,
 } as const;
 
 export const bulkLabels = {
@@ -131,8 +145,55 @@ export const detailLabels = {
   detail: '任务详情',
   title: '详情标题',
   notes: '详情备注',
+  status: '状态',
+  priority: '优先级',
+  dueDate: '截止日期',
+  estimate: '预计用时（分钟）',
+  energy: '精力类型',
+  project: '项目',
+  labels: '标签',
   collapse: '关闭详情面板',
   expand: '显示详情',
+  hide: '隐藏详情',
+  remove: (title: string) => `删除：${title}`,
+} as const;
+
+export const viewLabels = {
+  board: '状态看板',
+  list: '任务列表',
+  today: '今日任务',
+  completed: '已完成任务',
+  task: '任务',
+  status: '状态',
+  priority: '优先级',
+  date: '日期',
+  estimate: '预计',
+  noNotesOrProject: '没有备注或项目。',
+  selectTask: (title: string) => `选择任务：${title}`,
+  toggleDone: (title: string) => `切换完成：${title}`,
+  viewDetail: (title: string) => `查看详情：${title}`,
+  column: (status: string) => `${status}栏`,
+} as const;
+
+export const workspaceLabels = {
+  canvas: '任务画布',
+  detailLayer: '任务详情层',
+} as const;
+
+export const operationMessages = {
+  storageUnavailable: '存储不可用，当前修改可能不会持久化。',
+  taskCreated: (title: string) => `已创建任务“${title}”。系统已持久化。`,
+  tasksCompleted: (count: number) => `已完成 ${count} 个任务。`,
+  tasksMoved: (count: number, status: string) => `已移动 ${count} 个任务到${status}。`,
+  tasksDeleted: (count: number) => `已删除 ${count} 个任务。`,
+  exported: '任务已导出。',
+  importReady: (count: number) => `准备导入 ${count} 个任务，请选择替换或合并。`,
+  importFailed: '导入失败。',
+  importReplaced: (count: number) => `已替换为 ${count} 个任务。`,
+  importMerged: (added: number, skipped: number) => `已合并 ${added} 个任务，跳过 ${skipped} 个重复任务。`,
+  importCanceled: '已取消导入。',
+  taskMovedToStatus: (title: string, status: string) => `已移动“${title}”到${status}。`,
+  taskMovedBefore: (title: string, targetTitle: string) => `已移动“${title}”到“${targetTitle}”前。`,
 } as const;
 
 export const emptyMessages = {

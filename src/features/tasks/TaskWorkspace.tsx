@@ -12,7 +12,7 @@ import { TaskQuickAdd } from './TaskQuickAdd';
 import { TaskToolbar } from './TaskToolbar';
 import type { TaskViewMode } from './TaskToolbar';
 import { TaskViews } from './TaskViews';
-import { columnQuickAddLabels, dueFilterLabels, emptyMessages, labelsFromInput, priorityLabels, statusLabels, toolbarLabels } from './taskUiText';
+import { columnQuickAddLabels, dueFilterLabels, emptyMessages, labelsFromInput, operationMessages, priorityLabels, statusLabels, toolbarLabels, workspaceLabels } from './taskUiText';
 import type { Task, TaskDraft, TaskFilters, TaskPriority, TaskStatus } from './taskTypes';
 
 const storageKey = 'personal-task-manager.tasks.v1';
@@ -70,7 +70,7 @@ export function TaskWorkspace() {
     try {
       saveJson(storageKey, tasks);
     } catch {
-      setMessage('存储不可用，当前修改可能不会持久化。');
+      setMessage(operationMessages.storageUnavailable);
     }
   }, [recoveryRaw, tasks]);
 
@@ -211,19 +211,15 @@ export function TaskWorkspace() {
     viewMode === 'today' ? sortedTasks.filter((task) => task.status !== 'done' && task.dueDate && task.dueDate <= today) : viewMode === 'completed' ? tasks.filter((task) => task.status === 'done') : sortedTasks;
   const workspaceVisibleTasks = viewMode === 'completed' ? completedTasks : viewMode === 'today' ? todayTasks : filteredTasks;
   const activeFilterLabels = [
-    filters.search?.trim() ? `搜索：${filters.search.trim()}` : '',
-    (filters.status ?? 'all') !== 'all' ? `状态：${statusLabels[filters.status as TaskStatus]}` : '',
-    (filters.priority ?? 'all') !== 'all' ? `优先级：${priorityLabels[filters.priority as TaskPriority]}` : '',
-    (filters.due ?? 'all') !== 'all' ? `日期：${dueFilterLabels[filters.due ?? 'all']}` : '',
-    filters.project ? `项目：${filters.project}` : '',
-    filters.label ? `标签：${filters.label}` : '',
-    hideCompleted ? '隐藏已完成任务' : '',
+    filters.search?.trim() ? toolbarLabels.searchFilter(filters.search.trim()) : '',
+    (filters.status ?? 'all') !== 'all' ? toolbarLabels.statusFilterValue(statusLabels[filters.status as TaskStatus]) : '',
+    (filters.priority ?? 'all') !== 'all' ? toolbarLabels.priorityFilter(priorityLabels[filters.priority as TaskPriority]) : '',
+    (filters.due ?? 'all') !== 'all' ? toolbarLabels.dueFilter(dueFilterLabels[filters.due ?? 'all']) : '',
+    filters.project ? toolbarLabels.projectFilter(filters.project) : '',
+    filters.label ? toolbarLabels.labelFilter(filters.label) : '',
+    hideCompleted ? toolbarLabels.hideCompleted : '',
   ].filter(Boolean);
-  const workspaceStatus = hasActiveFilters ? `已筛选 ${workspaceVisibleTasks.length} / ${workspaceScopeTasks.length} 个任务` : `全部 ${workspaceScopeTasks.length} 个任务`;
-
-  function sanitizeHtml(value: string): string {
-    return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
-  }
+  const workspaceStatus = hasActiveFilters ? toolbarLabels.filteredStatus(workspaceVisibleTasks.length, workspaceScopeTasks.length) : toolbarLabels.allStatus(workspaceScopeTasks.length);
 
   function resetDraft() {
     setDraft(emptyDraft);
@@ -244,7 +240,7 @@ export function TaskWorkspace() {
     const task = createTask({ ...draft, labels: labelsFromInput(labelInput) }, { id: createId(), now: nowIso() });
     setTasks((current) => [task, ...current]);
     setSelectedId(task.id);
-    setMessage(`已创建任务“${sanitizeHtml(task.title)}”。系统已持久化。`);
+    setMessage(operationMessages.taskCreated(task.title));
     resetDraft();
   }
 
@@ -285,14 +281,14 @@ export function TaskWorkspace() {
   function completeSelectedTasks() {
     const completedAt = nowIso();
     setTasks((current) => current.map((task) => (visibleSelectedTaskIds.includes(task.id) ? updateTask(task, { status: 'done' }, completedAt) : task)));
-    setMessage(`已完成 ${visibleSelectedTaskIds.length} 个任务。`);
+    setMessage(operationMessages.tasksCompleted(visibleSelectedTaskIds.length));
     clearSelection();
   }
 
   function moveSelectedTasks(status: TaskStatus) {
     const movedAt = nowIso();
     setTasks((current) => current.map((task) => (visibleSelectedTaskIds.includes(task.id) ? updateTask(task, { status }, movedAt) : task)));
-    setMessage(`已移动 ${visibleSelectedTaskIds.length} 个任务到${sanitizeHtml(statusLabels[status])}。`);
+    setMessage(operationMessages.tasksMoved(visibleSelectedTaskIds.length, statusLabels[status]));
     clearSelection();
   }
 
@@ -300,7 +296,7 @@ export function TaskWorkspace() {
     const deletedCount = visibleSelectedTaskIds.length;
     setTasks((current) => current.filter((task) => !visibleSelectedTaskIds.includes(task.id)));
     if (visibleSelectedTaskIds.includes(selectedId)) setSelectedId('');
-    setMessage(`已删除 ${deletedCount} 个任务。`);
+    setMessage(operationMessages.tasksDeleted(deletedCount));
     clearSelection();
   }
 
@@ -314,7 +310,7 @@ export function TaskWorkspace() {
     anchor.click();
     document.body.removeChild(anchor);
     URL.revokeObjectURL(url);
-    setMessage('任务已导出。');
+    setMessage(operationMessages.exported);
   }
 
   function downloadRecoveryData() {
@@ -345,10 +341,10 @@ export function TaskWorkspace() {
     try {
       const importedTasks = importTasksFromJson(await file.text());
       setPendingImport(importedTasks);
-      setMessage(`准备导入 ${importedTasks.length} 个任务，请选择替换或合并。`);
+      setMessage(operationMessages.importReady(importedTasks.length));
     } catch (error) {
       setPendingImport([]);
-      setMessage(error instanceof Error ? error.message : '导入失败。');
+      setMessage(error instanceof Error ? error.message : operationMessages.importFailed);
     }
   }
 
@@ -357,7 +353,7 @@ export function TaskWorkspace() {
     setRecoveryRaw(null);
     setSelectedTaskIds([]);
     setSelectedId(pendingImport[0]?.id ?? '');
-    setMessage(`已替换为 ${pendingImport.length} 个任务。`);
+    setMessage(operationMessages.importReplaced(pendingImport.length));
     setPendingImport([]);
   }
 
@@ -367,13 +363,13 @@ export function TaskWorkspace() {
     setTasks((current) => [...tasksToAdd, ...current]);
     setSelectedId(tasksToAdd[0]?.id ?? selectedId);
     setRecoveryRaw(null);
-    setMessage(`已合并 ${tasksToAdd.length} 个任务，跳过 ${pendingImport.length - tasksToAdd.length} 个重复任务。`);
+    setMessage(operationMessages.importMerged(tasksToAdd.length, pendingImport.length - tasksToAdd.length));
     setPendingImport([]);
   }
 
   function cancelImport() {
     setPendingImport([]);
-    setMessage('已取消导入。');
+    setMessage(operationMessages.importCanceled);
   }
 
   function handleTaskDragStart(event: DragEvent<HTMLElement>, task: Task) {
@@ -416,7 +412,7 @@ export function TaskWorkspace() {
     const targetIndex = groups[status].length;
     setTasks((current) => moveTask(current, taskId, status, targetIndex, updatedAt));
     setSelectedId(taskId);
-    setMessage(`已移动“${sanitizeHtml(task.title)}”到${sanitizeHtml(statusLabels[status])}。`);
+    setMessage(operationMessages.taskMovedToStatus(task.title, statusLabels[status]));
   }
 
   function handleTaskDrop(event: DragEvent<HTMLElement>, targetTask: Task) {
@@ -441,7 +437,7 @@ export function TaskWorkspace() {
       return moveTask(current, taskId, targetTask.status, targetIndex, movedAt);
     });
     setSelectedId(taskId);
-    setMessage(`已移动“${task.title}”到“${targetTask.title}”前。`);
+    setMessage(operationMessages.taskMovedBefore(task.title, targetTask.title));
   }
 
   function getDetailEmptyStateMessage(currentViewMode: TaskViewMode) {
@@ -508,7 +504,7 @@ export function TaskWorkspace() {
           onMobileFiltersExpandedChange={setIsMobileFiltersExpanded}
         />
 
-        <div className="content-grid" aria-label="任务画布">
+        <div className="content-grid" aria-label={workspaceLabels.canvas}>
           <TaskViews
             viewMode={viewMode}
             filteredTasks={filteredTasks}
@@ -543,7 +539,7 @@ export function TaskWorkspace() {
           role="dialog"
           aria-modal="true"
           aria-labelledby={detailHeadingId}
-          aria-label="任务详情层"
+          aria-label={workspaceLabels.detailLayer}
         >
           <div className="detail-scrim" aria-hidden="true" onClick={closeDetail} />
           <TaskDetailPanel

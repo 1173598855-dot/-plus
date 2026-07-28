@@ -208,6 +208,16 @@ describe('TaskWorkspace', () => {
     expect(stored).toContain('系统建设');
   });
 
+  it('announces task text literally without displaying HTML entities', async () => {
+    const user = userEvent.setup();
+    render(<TaskWorkspace />);
+
+    await user.type(screen.getByLabelText('任务标题'), '<审查 & 修复>');
+    await user.click(screen.getByRole('button', { name: '添加任务' }));
+
+    expect(screen.getByRole('status')).toHaveTextContent('已创建任务“<审查 & 修复>”。系统已持久化。');
+  });
+
   it('progressively discloses quick-add details', async () => {
     const user = userEvent.setup();
     render(<TaskWorkspace />);
@@ -711,6 +721,32 @@ describe('TaskWorkspace', () => {
 
     expect(screen.queryByLabelText('任务详情')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '显示详情' })).toBeInTheDocument();
+  });
+
+  it('supports natural multi-word and comma-separated typing in task details', async () => {
+    const user = userEvent.setup();
+    render(<TaskWorkspace />);
+    await user.click(screen.getByRole('button', { name: '查看详情：任务管理库第一篇文档' }));
+
+    const title = screen.getByLabelText('详情标题');
+    await user.clear(title);
+    await user.type(title, '新的 任务标题');
+    expect(title).toHaveValue('新的 任务标题');
+
+    const notes = screen.getByLabelText('详情备注');
+    await user.clear(notes);
+    await user.type(notes, '第一段 第二段');
+    expect(notes).toHaveValue('第一段 第二段');
+
+    const project = screen.getByLabelText('项目');
+    await user.clear(project);
+    await user.type(project, '个人 系统');
+    expect(project).toHaveValue('个人 系统');
+
+    const labels = screen.getByLabelText('标签');
+    await user.clear(labels);
+    await user.type(labels, '开发, 审查');
+    expect(labels).toHaveValue('开发, 审查');
   });
 
   it('includes overdue tasks in the today execution view', async () => {

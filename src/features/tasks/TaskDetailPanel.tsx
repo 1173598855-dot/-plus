@@ -1,5 +1,5 @@
 import { PanelRightClose, Trash2 } from 'lucide-react';
-import type { Ref } from 'react';
+import { useEffect, useState, type Ref } from 'react';
 import { taskStatuses } from './taskDomain';
 import { detailLabels, energyLabels, labelsFromInput, labelsToInput, priorityLabels, statusLabels } from './taskUiText';
 import type { Task, TaskDraft, TaskEnergy, TaskPriority, TaskStatus } from './taskTypes';
@@ -15,7 +15,29 @@ export interface TaskDetailPanelProps {
 
 export const detailHeadingId = 'task-detail-heading';
 
+interface DetailTextDraft {
+  title: string;
+  notes: string;
+  project: string;
+  labels: string;
+}
+
+function createTextDraft(task: Task | undefined): DetailTextDraft {
+  return {
+    title: task?.title ?? '',
+    notes: task?.notes ?? '',
+    project: task?.project ?? '',
+    labels: labelsToInput(task?.labels ?? []),
+  };
+}
+
 export function TaskDetailPanel({ task, emptyMessage, closeButtonRef, onPatch, onRemove, onClose }: TaskDetailPanelProps) {
+  const [textDraft, setTextDraft] = useState(() => createTextDraft(task));
+
+  useEffect(() => {
+    setTextDraft(createTextDraft(task));
+  }, [task?.id]);
+
   return (
     <aside className="detail">
       <div className="detail-header">
@@ -25,7 +47,7 @@ export function TaskDetailPanel({ task, emptyMessage, closeButtonRef, onPatch, o
             <PanelRightClose size={16} />
           </button>
           {task && (
-            <button className="danger" type="button" onClick={() => onRemove(task)} aria-label={`删除：${task.title}`}>
+            <button className="danger" type="button" onClick={() => onRemove(task)} aria-label={detailLabels.remove(task.title)}>
               <Trash2 size={16} />
             </button>
           )}
@@ -33,10 +55,28 @@ export function TaskDetailPanel({ task, emptyMessage, closeButtonRef, onPatch, o
       </div>
       {task ? (
         <>
-          <input aria-label={detailLabels.title} value={task.title} onChange={(event) => onPatch(task, { title: event.target.value })} />
-          <textarea aria-label={detailLabels.notes} value={task.notes} onChange={(event) => onPatch(task, { notes: event.target.value })} />
+          <input
+            aria-label={detailLabels.title}
+            value={textDraft.title}
+            onChange={(event) => {
+              const title = event.target.value;
+              setTextDraft((current) => ({ ...current, title }));
+              if (title.trim()) onPatch(task, { title });
+            }}
+            onBlur={() => setTextDraft((current) => ({ ...current, title: current.title.trim() || task.title }))}
+          />
+          <textarea
+            aria-label={detailLabels.notes}
+            value={textDraft.notes}
+            onChange={(event) => {
+              const notes = event.target.value;
+              setTextDraft((current) => ({ ...current, notes }));
+              onPatch(task, { notes });
+            }}
+            onBlur={() => setTextDraft((current) => ({ ...current, notes: current.notes.trim() }))}
+          />
           <label>
-            状态
+            {detailLabels.status}
             <select value={task.status} onChange={(event) => onPatch(task, { status: event.target.value as TaskStatus })}>
               {taskStatuses.map((status) => (
                 <option key={status} value={status}>
@@ -46,7 +86,7 @@ export function TaskDetailPanel({ task, emptyMessage, closeButtonRef, onPatch, o
             </select>
           </label>
           <label>
-            优先级
+            {detailLabels.priority}
             <select value={task.priority} onChange={(event) => onPatch(task, { priority: event.target.value as TaskPriority })}>
               {Object.entries(priorityLabels).map(([value, label]) => (
                 <option key={value} value={value}>
@@ -56,15 +96,15 @@ export function TaskDetailPanel({ task, emptyMessage, closeButtonRef, onPatch, o
             </select>
           </label>
           <label>
-            截止日期
+            {detailLabels.dueDate}
             <input type="date" value={task.dueDate} onChange={(event) => onPatch(task, { dueDate: event.target.value })} />
           </label>
           <label>
-            预计用时（分钟）
+            {detailLabels.estimate}
             <input type="number" min="0" step="5" value={task.estimateMinutes || ''} onChange={(event) => onPatch(task, { estimateMinutes: Number(event.target.value) || 0 })} />
           </label>
           <label>
-            精力类型
+            {detailLabels.energy}
             <select value={task.energy} onChange={(event) => onPatch(task, { energy: event.target.value as TaskEnergy })}>
               {Object.entries(energyLabels).map(([value, label]) => (
                 <option key={value} value={value}>
@@ -74,12 +114,28 @@ export function TaskDetailPanel({ task, emptyMessage, closeButtonRef, onPatch, o
             </select>
           </label>
           <label>
-            项目
-            <input value={task.project} onChange={(event) => onPatch(task, { project: event.target.value })} />
+            {detailLabels.project}
+            <input
+              value={textDraft.project}
+              onChange={(event) => {
+                const project = event.target.value;
+                setTextDraft((current) => ({ ...current, project }));
+                onPatch(task, { project });
+              }}
+              onBlur={() => setTextDraft((current) => ({ ...current, project: current.project.trim() }))}
+            />
           </label>
           <label>
-            标签
-            <input value={labelsToInput(task.labels)} onChange={(event) => onPatch(task, { labels: labelsFromInput(event.target.value) })} />
+            {detailLabels.labels}
+            <input
+              value={textDraft.labels}
+              onChange={(event) => {
+                const labels = event.target.value;
+                setTextDraft((current) => ({ ...current, labels }));
+                onPatch(task, { labels: labelsFromInput(labels) });
+              }}
+              onBlur={() => setTextDraft((current) => ({ ...current, labels: labelsToInput(labelsFromInput(current.labels)) }))}
+            />
           </label>
         </>
       ) : (
