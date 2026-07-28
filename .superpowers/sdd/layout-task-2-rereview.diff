@@ -1,0 +1,854 @@
+# Review package: 5380d6e..0542c08
+
+## Commits
+0542c08 fix: expose quick add disclosure state
+4f46271 feat: add progressive quick capture
+
+## Files changed
+ src/features/tasks/TaskQuickAdd.tsx       | 154 +++++++++++
+ src/features/tasks/TaskWorkspace.test.tsx |  34 +++
+ src/features/tasks/TaskWorkspace.tsx      | 436 ++++++++++++++++++++++++++++++
+ src/features/tasks/taskUiText.ts          | 132 +++++++++
+ 4 files changed, 756 insertions(+)
+
+## Diff
+diff --git a/src/features/tasks/TaskQuickAdd.tsx b/src/features/tasks/TaskQuickAdd.tsx
+new file mode 100644
+index 0000000..3c0b7f0
+--- /dev/null
++++ b/src/features/tasks/TaskQuickAdd.tsx
+@@ -0,0 +1,154 @@
++import { ChevronDown, ChevronUp, Download, Plus, Upload } from 'lucide-react';
++import type { Ref } from 'react';
++import { taskStatuses } from './taskDomain';
++import { energyLabels, priorityLabels, quickAddLabels, statusLabels } from './taskUiText';
++import type { TaskDraft, TaskEnergy, TaskPriority, TaskStatus, TaskSummary } from './taskTypes';
++
++export interface TaskQuickAddProps {
++  summary: TaskSummary;
++  draft: TaskDraft;
++  labelInput: string;
++  titleInputRef: Ref<HTMLInputElement>;
++  isExpanded: boolean;
++  message: string;
++  pendingImportCount: number;
++  onDraftChange: (draft: TaskDraft) => void;
++  onLabelInputChange: (value: string) => void;
++  onExpandedChange: (isExpanded: boolean) => void;
++  onAdd: () => void;
++  onExport: () => void;
++  onImport: (file: File | undefined) => void | Promise<void>;
++  onReplaceImport: () => void;
++  onMergeImport: () => void;
++  onCancelImport: () => void;
++}
++
++export function TaskQuickAdd({
++  summary,
++  draft,
++  labelInput,
++  titleInputRef,
++  isExpanded,
++  message,
++  pendingImportCount,
++  onDraftChange,
++  onLabelInputChange,
++  onExpandedChange,
++  onAdd,
++  onExport,
++  onImport,
++  onReplaceImport,
++  onMergeImport,
++  onCancelImport,
++}: TaskQuickAddProps) {
++  return (
++    <aside className="rail" aria-label={quickAddLabels.rail}>
++      <div className="brand-block">
++        <span className="brand-mark">{quickAddLabels.brandMark}</span>
++        <div>
++          <h1>{quickAddLabels.brandTitle}</h1>
++          <p>{quickAddLabels.brandSubtitle}</p>
++        </div>
++      </div>
++
++      <section className="metric-grid" aria-label={quickAddLabels.metricsTitle}>
++        <div>
++          <strong>{summary.active}</strong>
++          <span>{quickAddLabels.active}</span>
++        </div>
++        <div>
++          <strong>{summary.dueToday}</strong>
++          <span>{quickAddLabels.today}</span>
++        </div>
++        <div>
++          <strong>{summary.overdue}</strong>
++          <span>{quickAddLabels.overdue}</span>
++        </div>
++        <div>
++          <strong>{summary.completed}</strong>
++          <span>{quickAddLabels.completed}</span>
++        </div>
++      </section>
++
++      <section className="quick-add" aria-label={quickAddLabels.quickAdd}>
++        <h2>{quickAddLabels.quickAddTitle}</h2>
++        <div className="quick-capture-row">
++          <input ref={titleInputRef} aria-label={quickAddLabels.title} value={draft.title} onChange={(event) => onDraftChange({ ...draft, title: event.target.value })} placeholder={quickAddLabels.placeholder} />
++          <button type="button" aria-label={isExpanded ? quickAddLabels.collapseDetails : quickAddLabels.expandDetails} aria-expanded={isExpanded} aria-controls="quick-add-fields" title={isExpanded ? quickAddLabels.collapseDetails : quickAddLabels.expandDetails} onClick={() => onExpandedChange(!isExpanded)}>
++            {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
++          </button>
++          <button className="primary" type="button" onClick={onAdd} disabled={!draft.title?.trim()}>
++            <Plus size={16} /> {quickAddLabels.addTask}
++          </button>
++        </div>
++        {isExpanded && <div id="quick-add-fields" className="quick-add-fields">
++          <textarea aria-label={quickAddLabels.notes} value={draft.notes} onChange={(event) => onDraftChange({ ...draft, notes: event.target.value })} placeholder={quickAddLabels.notesPlaceholder} />
++          <div className="form-row">
++            <select aria-label={quickAddLabels.status} value={draft.status} onChange={(event) => onDraftChange({ ...draft, status: event.target.value as TaskStatus })}>
++              {taskStatuses.map((status) => (
++                <option key={status} value={status}>
++                  {statusLabels[status]}
++                </option>
++              ))}
++            </select>
++            <select aria-label={quickAddLabels.priority} value={draft.priority} onChange={(event) => onDraftChange({ ...draft, priority: event.target.value as TaskPriority })}>
++              {Object.entries(priorityLabels).map(([value, label]) => (
++                <option key={value} value={value}>
++                  {label}
++                </option>
++              ))}
++            </select>
++          </div>
++          <input aria-label={quickAddLabels.dueDate} type="date" value={draft.dueDate} onChange={(event) => onDraftChange({ ...draft, dueDate: event.target.value })} />
++          <div className="form-row">
++            <input
++              aria-label={quickAddLabels.estimate}
++              type="number"
++              min="0"
++              step="5"
++              value={draft.estimateMinutes || ''}
++              onChange={(event) => onDraftChange({ ...draft, estimateMinutes: Number(event.target.value) || 0 })}
++              placeholder={quickAddLabels.estimatePlaceholder}
++            />
++            <select aria-label={quickAddLabels.energy} value={draft.energy} onChange={(event) => onDraftChange({ ...draft, energy: event.target.value as TaskEnergy })}>
++              {Object.entries(energyLabels).map(([value, label]) => (
++                <option key={value} value={value}>
++                  {label}
++                </option>
++              ))}
++            </select>
++          </div>
++          <input aria-label={quickAddLabels.project} value={draft.project} onChange={(event) => onDraftChange({ ...draft, project: event.target.value })} placeholder={quickAddLabels.projectPlaceholder} />
++          <input aria-label={quickAddLabels.labels} value={labelInput} onChange={(event) => onLabelInputChange(event.target.value)} placeholder={quickAddLabels.labelsPlaceholder} />
++        </div>}
++        <div className="backup-actions" aria-label={quickAddLabels.backupTitle}>
++          <button className="secondary-action" type="button" onClick={onExport}>
++            <Download size={16} /> {quickAddLabels.export}
++          </button>
++          <label className="secondary-action file-action">
++            <Upload size={16} /> {quickAddLabels.import}
++            <input aria-label={quickAddLabels.importInput} type="file" accept="application/json,.json" onChange={(event) => void onImport(event.target.files?.[0])} />
++          </label>
++        </div>
++        {message && (
++          <p className="message" role="status" aria-live="polite">
++            {message}
++          </p>
++        )}
++        {pendingImportCount > 0 && (
++          <div className="import-actions" aria-label={quickAddLabels.importTitle}>
++            <button className="secondary-action" type="button" onClick={onReplaceImport}>
++              {quickAddLabels.replace}
++            </button>
++            <button className="secondary-action" type="button" onClick={onMergeImport}>
++              {quickAddLabels.merge}
++            </button>
++            <button className="clear-filter" type="button" onClick={onCancelImport}>
++              {quickAddLabels.cancel}
++            </button>
++          </div>
++        )}
++      </section>
++    </aside>
++  );
++}
+diff --git a/src/features/tasks/TaskWorkspace.test.tsx b/src/features/tasks/TaskWorkspace.test.tsx
+index ad84770..41f76fe 100644
+--- a/src/features/tasks/TaskWorkspace.test.tsx
++++ b/src/features/tasks/TaskWorkspace.test.tsx
+@@ -46,40 +46,73 @@ describe('TaskWorkspace', () => {
+     expect(screen.getByText('整理本周重点任务')).toBeInTheDocument();
+     expect(screen.getByText('任务管理库第一篇文档')).toBeInTheDocument();
+   });
+ 
+   it('creates a task and persists it to localStorage', async () => {
+     const user = userEvent.setup();
+     render(<TaskWorkspace />);
+     const quickAdd = within(screen.getByLabelText('新建任务'));
+ 
+     await user.type(quickAdd.getByLabelText('任务标题'), '个人任务系统');
++    await user.click(screen.getByRole('button', { name: '展开详细字段' }));
+     await user.type(quickAdd.getByLabelText('预计用时（分钟）'), '45');
+     await user.selectOptions(quickAdd.getByLabelText('精力类型'), 'high');
+     await user.type(quickAdd.getByLabelText('项目'), '系统建设');
+     await user.type(quickAdd.getByLabelText('标签'), '个人, 产品');
+     await user.click(screen.getByRole('button', { name: /添加任务/ }));
+ 
+     expect(screen.getByText('个人任务系统')).toBeInTheDocument();
+     const createdTaskCard = screen.getByText('个人任务系统').closest('article');
+     expect(createdTaskCard).not.toBeNull();
+     expect(within(createdTaskCard as HTMLElement).getByText('45 分钟')).toBeInTheDocument();
+     expect(within(createdTaskCard as HTMLElement).getByText('高精力')).toBeInTheDocument();
+     expect(screen.getByRole('status')).toHaveTextContent('已创建任务“个人任务系统”。系统已持久化。');
+ 
+     const stored = localStorage.getItem('personal-task-manager.tasks.v1');
+     expect(stored).toContain('个人任务系统');
+     expect(stored).toContain('"estimateMinutes":45');
+     expect(stored).toContain('"energy":"high"');
+     expect(stored).toContain('系统建设');
+   });
+ 
++  it('progressively discloses quick-add details', async () => {
++    const user = userEvent.setup();
++    render(<TaskWorkspace />);
++
++    expect(screen.getByLabelText('任务标题')).toBeInTheDocument();
++    expect(screen.queryByLabelText('任务备注')).not.toBeInTheDocument();
++    const toggle = screen.getByRole('button', { name: '展开详细字段' });
++    const detailsId = 'quick-add-fields';
++    expect(toggle).toHaveAttribute('aria-expanded', 'false');
++    expect(toggle).toHaveAttribute('aria-controls', detailsId);
++
++    await user.click(toggle);
++    expect(screen.getByLabelText('任务备注')).toBeInTheDocument();
++    expect(screen.getByLabelText('任务状态')).toBeInTheDocument();
++    expect(toggle).toHaveAttribute('aria-expanded', 'true');
++    expect(document.getElementById(detailsId)).toHaveAttribute('id', detailsId);
++
++    await user.click(screen.getByRole('button', { name: '收起详细字段' }));
++    expect(screen.queryByLabelText('任务备注')).not.toBeInTheDocument();
++    expect(toggle).toHaveAttribute('aria-expanded', 'false');
++  });
++
++  it('expands quick add and focuses its title with the n shortcut', async () => {
++    const user = userEvent.setup();
++    render(<TaskWorkspace />);
++
++    await user.keyboard('n');
++
++    expect(await screen.findByLabelText('任务备注')).toBeInTheDocument();
++    await waitFor(() => expect(screen.getByLabelText('任务标题')).toHaveFocus());
++  });
++
+   it('hides completed tasks from the working views when the toggle is enabled', async () => {
+     const user = userEvent.setup();
+     render(<TaskWorkspace />);
+ 
+     await user.click(screen.getByText('等待反馈：下一步是否加入番茄钟')); 
+     await user.click(screen.getByRole('button', { name: '切换完成：等待反馈：下一步是否加入番茄钟' }));
+     expect(screen.getByText('等待反馈：下一步是否加入番茄钟')).toBeInTheDocument();
+ 
+     await user.click(screen.getByLabelText('隐藏已完成任务')); 
+ 
+@@ -302,20 +335,21 @@ describe('TaskWorkspace', () => {
+     expect(screen.queryByLabelText('任务详情')).not.toBeInTheDocument();
+     expect(screen.getByRole('button', { name: '显示详情' })).toBeInTheDocument();
+   });
+ 
+   it('includes overdue tasks in the today execution view', async () => {
+     const user = userEvent.setup();
+     render(<TaskWorkspace />);
+     const quickAdd = within(screen.getByLabelText('新建任务'));
+ 
+     await user.type(quickAdd.getByLabelText('任务标题'), '逾期发票订单');
++    await user.click(screen.getByRole('button', { name: '展开详细字段' }));
+     await user.type(quickAdd.getByLabelText('截止日期'), '2026-07-02');
+     await user.click(screen.getByRole('button', { name: /添加任务/ }));
+     await user.click(screen.getByRole('button', { name: '今日' }));
+ 
+     expect(screen.getByLabelText('今日任务')).toBeInTheDocument();
+     expect(screen.getByText('整理本周重点任务')).toBeInTheDocument();
+     expect(screen.getByText('逾期发票订单')).toBeInTheDocument();
+   });
+ 
+   it('updates the detail panel to the first today task in the today view', async () => {
+diff --git a/src/features/tasks/TaskWorkspace.tsx b/src/features/tasks/TaskWorkspace.tsx
+new file mode 100644
+index 0000000..4fa6303
+--- /dev/null
++++ b/src/features/tasks/TaskWorkspace.tsx
+@@ -0,0 +1,436 @@
++import { useEffect, useMemo, useRef, useState } from 'react';
++import type { DragEvent } from 'react';
++import { nowIso, todayIso } from '../../lib/date';
++import { createId } from '../../lib/id';
++import { loadJson, saveJson } from '../../lib/storage';
++import { createTask, deleteTask, filterTasks, groupTasksByStatus, moveTask, normalizeTasks, sortTasks, summarizeTasks, updateTask } from './taskDomain';
++import { exportTasksToJson, importTasksFromJson } from './taskBackup';
++import { seedTasks } from './seedTasks';
++import { TaskBulkActions } from './TaskBulkActions';
++import { TaskDetailPanel } from './TaskDetailPanel';
++import { TaskQuickAdd } from './TaskQuickAdd';
++import { TaskToolbar } from './TaskToolbar';
++import type { TaskViewMode } from './TaskToolbar';
++import { TaskViews } from './TaskViews';
++import { dueFilterLabels, emptyMessages, labelsFromInput, priorityLabels, statusLabels, toolbarLabels } from './taskUiText';
++import type { Task, TaskDraft, TaskFilters, TaskPriority, TaskStatus } from './taskTypes';
++
++const storageKey = 'personal-task-manager.tasks.v1';
++
++const emptyDraft: TaskDraft = { title: '', notes: '', status: 'inbox', priority: 'medium', dueDate: '', project: '', labels: [], estimateMinutes: 0, energy: 'medium' };
++
++const handledDropType = 'application/x-task-drop-handled';
++const cardDropType = 'application/x-task-card-drop';
++
++export function TaskWorkspace() {
++  const [tasks, setTasks] = useState<Task[]>(() => normalizeTasks(loadJson<Task[]>(storageKey, seedTasks)));
++  const [draft, setDraft] = useState<TaskDraft>(emptyDraft);
++  const [labelInput, setLabelInput] = useState('');
++  const [filters, setFilters] = useState<TaskFilters>({ status: 'all', priority: 'all', due: 'all' });
++  const [viewMode, setViewMode] = useState<TaskViewMode>('board');
++  const [selectedId, setSelectedId] = useState<string>('');
++  const [hideCompleted, setHideCompleted] = useState(false);
++  const [showDetail, setShowDetail] = useState(true);
++  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
++  const [pendingImport, setPendingImport] = useState<Task[]>([]);
++  const [message, setMessage] = useState('');
++  const [draggedTaskId, setDraggedTaskId] = useState('');
++  const [dragOverStatus, setDragOverStatus] = useState<TaskStatus | ''>('');
++  const [isQuickAddExpanded, setIsQuickAddExpanded] = useState(false);
++  const projects = useMemo(() => [...new Set(tasks.map((task) => task.project).filter(Boolean))], [tasks]);
++  const labelOptions = useMemo(() => [...new Set(tasks.flatMap((task) => task.labels))], [tasks]);
++  const searchInputRef = useRef<HTMLInputElement>(null);
++  const titleInputRef = useRef<HTMLInputElement>(null);
++  const today = useMemo(() => todayIso(), []);
++
++  useEffect(() => {
++    try {
++      saveJson(storageKey, tasks);
++    } catch {
++      setMessage('存储不可用，当前修改可能不会持久化。');
++    }
++  }, [pendingImport.length, tasks]);
++
++  useEffect(() => {
++    function isTypingTarget(target: EventTarget | null) {
++      if (!(target instanceof HTMLElement)) return false;
++      return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
++    }
++
++    function handleShortcut(event: KeyboardEvent) {
++      if (event.key === 'Escape' && isTypingTarget(event.target)) {
++        (event.target as HTMLElement).blur();
++        return;
++      }
++
++      if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || isTypingTarget(event.target)) return;
++
++      if (event.key === '/') {
++        event.preventDefault();
++        searchInputRef.current?.focus();
++        return;
++      }
++      if (event.key.toLowerCase() === 'n') {
++        setIsQuickAddExpanded(true);
++        window.requestAnimationFrame(() => titleInputRef.current?.focus());
++        return;
++      }
++      if (event.key === '1') setViewMode('board');
++      if (event.key === '2') setViewMode('list');
++      if (event.key === '3') setViewMode('today');
++      if (event.key === '4') setViewMode('completed');
++    }
++
++    window.addEventListener('keydown', handleShortcut);
++    return () => window.removeEventListener('keydown', handleShortcut);
++  }, []);
++
++  const sortedTasks = useMemo(() => sortTasks(tasks, today), [tasks, today]);
++  const filteredTasks = useMemo(() => {
++    const visibleTasks = hideCompleted ? sortedTasks.filter((task) => task.status !== 'done') : sortedTasks;
++    return filterTasks(visibleTasks, filters, today);
++  }, [filters, hideCompleted, sortedTasks, today]);
++  const groups = useMemo(() => groupTasksByStatus(filteredTasks), [filteredTasks]);
++  const todayTasks = useMemo(() => filteredTasks.filter((task) => task.status !== 'done' && task.dueDate && task.dueDate <= today), [filteredTasks, today]);
++  const completedTasks = useMemo(() => {
++    if (hideCompleted) return [];
++    return filterTasks(
++      sortTasks(
++        tasks.filter((task) => task.status === 'done'),
++        today,
++      ),
++      filters,
++      today,
++    );
++  }, [filters, hideCompleted, tasks, today]);
++  const summary = useMemo(() => summarizeTasks(tasks, today), [tasks, today]);
++
++  const visibleDetailTasks = useMemo(() => {
++    if (viewMode === 'today') return todayTasks;
++    if (viewMode === 'completed') return completedTasks;
++    return filteredTasks;
++  }, [completedTasks, filteredTasks, todayTasks, viewMode]);
++  const visibleDetailLabel = viewMode === 'today' ? '今日任务' : viewMode === 'completed' ? '已完成任务' : '状态看板';
++  const selectedTask = visibleDetailTasks.find((task) => task.id === selectedId) ?? visibleDetailTasks[0];
++  const visibleSelectedTaskIds = useMemo(() => visibleDetailTasks.filter((task) => selectedTaskIds.includes(task.id)).map((task) => task.id), [selectedTaskIds, visibleDetailTasks]);
++
++  useEffect(() => {
++    const taskIds = new Set(tasks.map((task) => task.id));
++
++    setSelectedTaskIds((current) => {
++      const next = current.filter((id) => taskIds.has(id));
++      return next.length === current.length ? current : next;
++    });
++    setSelectedId((current) => (current && taskIds.has(current) ? current : tasks[0]?.id ?? ''));
++  }, [tasks]);
++
++  useEffect(() => {
++    const visibleTaskIds = new Set(visibleDetailTasks.map((task) => task.id));
++
++    setSelectedTaskIds((current) => {
++      const next = current.filter((id) => visibleTaskIds.has(id));
++      return next.length === current.length ? current : next;
++    });
++  }, [visibleDetailTasks]);
++
++  const hasActiveFilters =
++    Boolean(filters.search?.trim()) ||
++    (filters.status ?? 'all') !== 'all' ||
++    (filters.priority ?? 'all') !== 'all' ||
++    (filters.due ?? 'all') !== 'all' ||
++    Boolean(filters.project) ||
++    Boolean(filters.label) ||
++    hideCompleted;
++  const workspaceScopeTasks =
++    viewMode === 'today' ? sortedTasks.filter((task) => task.status !== 'done' && task.dueDate && task.dueDate <= today) : viewMode === 'completed' ? tasks.filter((task) => task.status === 'done') : sortedTasks;
++  const workspaceVisibleTasks = viewMode === 'completed' ? completedTasks : viewMode === 'today' ? todayTasks : filteredTasks;
++  const activeFilterLabels = [
++    filters.search?.trim() ? `搜索：${filters.search.trim()}` : '',
++    (filters.status ?? 'all') !== 'all' ? `状态：${statusLabels[filters.status as TaskStatus]}` : '',
++    (filters.priority ?? 'all') !== 'all' ? `优先级：${priorityLabels[filters.priority as TaskPriority]}` : '',
++    (filters.due ?? 'all') !== 'all' ? `日期：${dueFilterLabels[filters.due ?? 'all']}` : '',
++    filters.project ? `项目：${filters.project}` : '',
++    filters.label ? `标签：${filters.label}` : '',
++    hideCompleted ? '隐藏已完成任务' : '',
++  ].filter(Boolean);
++  const workspaceStatus = hasActiveFilters ? `已筛选 ${workspaceVisibleTasks.length} / ${workspaceScopeTasks.length} 个任务` : `全部 ${workspaceScopeTasks.length} 个任务`;
++
++  function sanitizeHtml(value: string): string {
++    return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
++  }
++
++  function resetDraft() {
++    setDraft(emptyDraft);
++    setLabelInput('');
++  }
++
++  function addTask() {
++    const task = createTask({ ...draft, labels: labelsFromInput(labelInput) }, { id: createId(), now: nowIso() });
++    setTasks((current) => [task, ...current]);
++    setSelectedId(task.id);
++    setMessage(`已创建任务“${sanitizeHtml(task.title)}”。系统已持久化。`);
++    resetDraft();
++  }
++
++  function patchTask(task: Task, patch: Partial<TaskDraft>) {
++    setTasks((current) => current.map((item) => (item.id === task.id ? updateTask(item, patch, nowIso()) : item)));
++  }
++
++  function toggleDone(task: Task) {
++    patchTask(task, { status: task.status === 'done' ? 'next' : 'done' });
++  }
++
++  function removeTask(task: Task) {
++    setTasks((current) => deleteTask(current, task.id));
++    if (selectedId === task.id) setSelectedId('');
++  }
++
++  function clearFilters() {
++    setFilters({ status: 'all', priority: 'all', due: 'all', search: '', project: '', label: '' });
++    setHideCompleted(false);
++  }
++
++  function toggleTaskSelection(taskId: string) {
++    setSelectedTaskIds((current) => (current.includes(taskId) ? current.filter((id) => id !== taskId) : [...current, taskId]));
++  }
++
++  function clearSelection() {
++    setSelectedTaskIds([]);
++  }
++
++  function completeSelectedTasks() {
++    const completedAt = nowIso();
++    setTasks((current) => current.map((task) => (visibleSelectedTaskIds.includes(task.id) ? updateTask(task, { status: 'done' }, completedAt) : task)));
++    setMessage(`已完成 ${visibleSelectedTaskIds.length} 个任务。`);
++    clearSelection();
++  }
++
++  function moveSelectedTasks(status: TaskStatus) {
++    const movedAt = nowIso();
++    setTasks((current) => current.map((task) => (visibleSelectedTaskIds.includes(task.id) ? updateTask(task, { status }, movedAt) : task)));
++    setMessage(`已移动 ${visibleSelectedTaskIds.length} 个任务到${sanitizeHtml(statusLabels[status])}。`);
++    clearSelection();
++  }
++
++  function deleteSelectedTasks() {
++    const deletedCount = visibleSelectedTaskIds.length;
++    setTasks((current) => current.filter((task) => !visibleSelectedTaskIds.includes(task.id)));
++    if (visibleSelectedTaskIds.includes(selectedId)) setSelectedId('');
++    setMessage(`已删除 ${deletedCount} 个任务。`);
++    clearSelection();
++  }
++
++  function exportTasks() {
++    const blob = new Blob([exportTasksToJson(tasks)], { type: 'application/json' });
++    const url = URL.createObjectURL(blob);
++    const anchor = document.createElement('a');
++    anchor.href = url;
++    anchor.download = `personal-tasks-${today}.json`;
++    document.body.appendChild(anchor);
++    anchor.click();
++    document.body.removeChild(anchor);
++    URL.revokeObjectURL(url);
++    setMessage('任务已导出。');
++  }
++
++  async function importTasks(file: File | undefined) {
++    if (!file) return;
++    try {
++      const importedTasks = importTasksFromJson(await file.text());
++      setPendingImport(importedTasks);
++      setMessage(`准备导入 ${importedTasks.length} 个任务，请选择替换或合并。`);
++    } catch (error) {
++      setPendingImport([]);
++      setMessage(error instanceof Error ? error.message : '导入失败。');
++    }
++  }
++
++  function replaceTasksWithImport() {
++    setTasks(pendingImport);
++    setSelectedTaskIds([]);
++    setSelectedId(pendingImport[0]?.id ?? '');
++    setMessage(`已替换为 ${pendingImport.length} 个任务。`);
++    setPendingImport([]);
++  }
++
++  function mergeImportedTasks() {
++    const existingIds = new Set(tasks.map((task) => task.id));
++    const tasksToAdd = pendingImport.filter((task) => !existingIds.has(task.id));
++    setTasks((current) => [...tasksToAdd, ...current]);
++    setSelectedId(tasksToAdd[0]?.id ?? selectedId);
++    setMessage(`已合并 ${tasksToAdd.length} 个任务，跳过 ${pendingImport.length - tasksToAdd.length} 个重复任务。`);
++    setPendingImport([]);
++  }
++
++  function cancelImport() {
++    setPendingImport([]);
++    setMessage('已取消导入。');
++  }
++
++  function handleTaskDragStart(event: DragEvent<HTMLElement>, task: Task) {
++    setDraggedTaskId(task.id);
++    event.dataTransfer.effectAllowed = 'move';
++    event.dataTransfer.setData('text/plain', task.id);
++  }
++
++  function handleTaskDragEnd() {
++    setDraggedTaskId('');
++    setDragOverStatus('');
++  }
++
++  function handleTaskDragOver(event: DragEvent<HTMLElement>, status: TaskStatus) {
++    event.preventDefault();
++    event.dataTransfer.dropEffect = 'move';
++    setDragOverStatus(status);
++  }
++
++  function handleColumnDragLeave() {
++    setDragOverStatus('');
++  }
++
++  function handleColumnDragOver(event: DragEvent<HTMLElement>, status: TaskStatus) {
++    event.preventDefault();
++    event.dataTransfer.dropEffect = 'move';
++    setDragOverStatus(status);
++  }
++
++  function handleColumnDrop(event: DragEvent<HTMLElement>, status: TaskStatus) {
++    event.preventDefault();
++    if (event.dataTransfer.getData(handledDropType) || event.dataTransfer.getData(cardDropType)) return;
++    const taskId = event.dataTransfer.getData('text/plain') || draggedTaskId;
++    const task = tasks.find((item) => item.id === taskId);
++    setDraggedTaskId('');
++    setDragOverStatus('');
++    if (!task || task.status === status) return;
++
++    const updatedAt = nowIso();
++    const targetIndex = groups[status].length;
++    setTasks((current) => moveTask(current, taskId, status, targetIndex, updatedAt));
++    setSelectedId(taskId);
++    setMessage(`已移动“${sanitizeHtml(task.title)}”到${sanitizeHtml(statusLabels[status])}。`);
++  }
++
++  function handleTaskDrop(event: DragEvent<HTMLElement>, targetTask: Task) {
++    event.preventDefault();
++    event.stopPropagation();
++    event.dataTransfer.setData(handledDropType, 'true');
++    event.dataTransfer.setData(cardDropType, 'true');
++    const taskId = event.dataTransfer.getData('text/plain') || draggedTaskId;
++    const task = tasks.find((item) => item.id === taskId);
++    setDraggedTaskId('');
++    setDragOverStatus('');
++    if (!task || task.id === targetTask.id) return;
++
++    const movedAt = nowIso();
++    setTasks((current) => {
++      const currentGroups = groupTasksByStatus(sortTasks(current, today));
++      const targetTasks = currentGroups[targetTask.status].filter((item) => item.id !== taskId);
++      const targetIndex = Math.max(
++        0,
++        targetTasks.findIndex((item) => item.id === targetTask.id),
++      );
++      return moveTask(current, taskId, targetTask.status, targetIndex, movedAt);
++    });
++    setSelectedId(taskId);
++    setMessage(`已移动“${task.title}”到“${targetTask.title}”前。`);
++  }
++
++  function getDetailEmptyStateMessage(label: string) {
++    if (hasActiveFilters) return emptyMessages.detailFiltered;
++    if (label === '已完成任务') return emptyMessages.detailCompleted;
++    if (label === '今日任务') return emptyMessages.detailToday;
++    return emptyMessages.detailBoard;
++  }
++
++  return (
++    <main className="workspace">
++      <TaskQuickAdd
++        summary={summary}
++        draft={draft}
++        labelInput={labelInput}
++        titleInputRef={titleInputRef}
++        isExpanded={isQuickAddExpanded}
++        message={message}
++        pendingImportCount={pendingImport.length}
++        onDraftChange={setDraft}
++        onLabelInputChange={setLabelInput}
++        onExpandedChange={setIsQuickAddExpanded}
++        onAdd={addTask}
++        onExport={exportTasks}
++        onImport={importTasks}
++        onReplaceImport={replaceTasksWithImport}
++        onMergeImport={mergeImportedTasks}
++        onCancelImport={cancelImport}
++      />
++
++      <section className="main-panel" aria-label={toolbarLabels.mainPanel}>
++        <TaskToolbar
++          viewMode={viewMode}
++          searchInputRef={searchInputRef}
++          filters={filters}
++          workspaceStatus={workspaceStatus}
++          activeFilterLabels={activeFilterLabels}
++          hasActiveFilters={hasActiveFilters}
++          showDetail={showDetail}
++          projects={projects}
++          labelOptions={labelOptions}
++          hideCompleted={hideCompleted}
++          bulkActions={(
++            <TaskBulkActions
++              selectedCount={visibleSelectedTaskIds.length}
++              onComplete={completeSelectedTasks}
++              onMove={moveSelectedTasks}
++              onDelete={deleteSelectedTasks}
++              onClear={clearSelection}
++            />
++          )}
++          onViewModeChange={setViewMode}
++          onFiltersChange={setFilters}
++          onClearFilters={clearFilters}
++          onShowDetailChange={setShowDetail}
++          onHideCompletedChange={setHideCompleted}
++        />
++
++        <div className={`content-grid ${showDetail ? '' : 'detail-collapsed'}`}>
++          <TaskViews
++            viewMode={viewMode}
++            filteredTasks={filteredTasks}
++            todayTasks={todayTasks}
++            completedTasks={completedTasks}
++            groups={groups}
++            selectedTask={selectedTask}
++            selectedTaskIds={selectedTaskIds}
++            draggedTaskId={draggedTaskId}
++            dragOverStatus={dragOverStatus}
++            hasActiveFilters={hasActiveFilters}
++            onClearFilters={clearFilters}
++            onSelectTask={setSelectedId}
++            onToggleTaskSelection={toggleTaskSelection}
++            onToggleDone={toggleDone}
++            onOpenDetail={(task) => {
++              setSelectedId(task.id);
++              setShowDetail(true);
++            }}
++            onTaskDragStart={handleTaskDragStart}
++            onTaskDragEnd={handleTaskDragEnd}
++            onTaskDragOver={handleTaskDragOver}
++            onTaskDrop={handleTaskDrop}
++            onColumnDragOver={handleColumnDragOver}
++            onColumnDragLeave={handleColumnDragLeave}
++            onColumnDrop={handleColumnDrop}
++          />
++
++          {showDetail && (
++            <TaskDetailPanel
++              task={selectedTask}
++              emptyMessage={getDetailEmptyStateMessage(visibleDetailLabel)}
++              onPatch={patchTask}
++              onRemove={removeTask}
++              onClose={() => setShowDetail(false)}
++            />
++          )}
++        </div>
++      </section>
++    </main>
++  );
++}
+diff --git a/src/features/tasks/taskUiText.ts b/src/features/tasks/taskUiText.ts
+new file mode 100644
+index 0000000..17c1ce7
+--- /dev/null
++++ b/src/features/tasks/taskUiText.ts
+@@ -0,0 +1,132 @@
++import type { TaskEnergy, TaskFilters, TaskPriority, TaskStatus } from './taskTypes';
++
++export const statusLabels: Record<TaskStatus, string> = {
++  inbox: '收件箱',
++  next: '下一步',
++  scheduled: '已安排',
++  waiting: '等待中',
++  done: '已完成',
++};
++
++export const priorityLabels: Record<TaskPriority, string> = {
++  low: '低',
++  medium: '中',
++  high: '高',
++  urgent: '紧急',
++};
++
++export const energyLabels: Record<TaskEnergy, string> = {
++  low: '低精力',
++  medium: '中精力',
++  high: '高精力',
++};
++
++export const dueFilterLabels: Record<NonNullable<TaskFilters['due']>, string> = {
++  all: '全部日期',
++  overdue: '已逾期',
++  today: '今天',
++  upcoming: '即将到来',
++  none: '无日期',
++};
++
++export function labelsFromInput(value: string): string[] {
++  return value.split(',').map((label) => label.trim()).filter(Boolean);
++}
++
++export function labelsToInput(labels: string[]): string {
++  return labels.join(', ');
++}
++
++export function formatEstimate(minutes: number): string {
++  return minutes > 0 ? `${minutes} 分钟` : '无预计';
++}
++
++export const quickAddLabels = {
++  brandMark: 'PT',
++  brandTitle: '个人任务管理库',
++  brandSubtitle: '本地优先的行动工作台',
++  metricsTitle: '任务统计',
++  active: '进行中',
++  today: '今天',
++  overdue: '逾期',
++  completed: '完成',
++  quickAddTitle: '捕捉任务',
++  quickAdd: '新建任务',
++  title: '任务标题',
++  notes: '任务备注',
++  notesPlaceholder: '备注',
++  rail: '任务概览',
++  status: '任务状态',
++  priority: '任务优先级',
++  dueDate: '截止日期',
++  estimate: '预计用时（分钟）',
++  estimatePlaceholder: '预计用时',
++  energy: '精力类型',
++  project: '项目',
++  projectPlaceholder: '项目',
++  labels: '标签',
++  labelsPlaceholder: '标签，用英文逗号分隔',
++  placeholder: '下一步要做什么？',
++  expandDetails: '展开详细字段',
++  collapseDetails: '收起详细字段',
++  addTask: '添加任务',
++  backupTitle: '任务备份',
++  export: '导出',
++  import: '导入任务 JSON',
++  importInput: '导入任务 JSON',
++  importTitle: '确认导入任务',
++  replace: '替换当前任务',
++  merge: '合并到当前任务',
++  cancel: '取消导入',
++} as const;
++
++export const toolbarLabels = {
++  mainPanel: '工作台',
++  viewSwitch: '视图切换',
++  board: '看板',
++  list: '列表',
++  today: '今日',
++  completed: '完成',
++  search: '搜索任务',
++  searchPlaceholder: '搜索标题、备注、项目或标签',
++  status: '当前工作台状态',
++  filterChips: '当前筛选条件',
++  noFilters: '未启用筛选',
++  clearFilters: '清空筛选',
++  project: '按项目筛选',
++  label: '按标签筛选',
++  hideCompleted: '隐藏已完成任务',
++  due: '按日期筛选',
++  statusFilter: '按状态筛选',
++  priority: '按优先级筛选',
++} as const;
++
++export const bulkLabels = {
++  bulkActions: '批量操作',
++  selectedPrefix: '已选择',
++  selectedSuffix: '个任务',
++  complete: '批量完成',
++  move: '批量移动状态',
++  movePlaceholder: '移动到',
++  delete: '批量删除',
++  cancel: '取消选择',
++} as const;
++
++export const detailLabels = {
++  detail: '任务详情',
++  title: '详情标题',
++  notes: '详情备注',
++  collapse: '关闭详情面板',
++  expand: '显示详情',
++} as const;
++
++export const emptyMessages = {
++  board: '还没有任务。',
++  today: '今天和逾期任务已处理完。',
++  completed: '还没有已完成的任务。',
++  filtered: '当前筛选没有匹配的任务。',
++  detailBoard: '还没有可查看的任务。',
++  detailToday: '今天和逾期任务已全部处理完。',
++  detailCompleted: '还没有已完成的任务可查看。',
++  detailFiltered: '当前筛选下没有可查看的任务。',
++} as const;

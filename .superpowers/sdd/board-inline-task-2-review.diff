@@ -1,0 +1,282 @@
+commit 96617b72a19a8633bc235f6c72981b76ee148c35
+Author:     1173598855-dot <1173598855-dot@users.noreply.github.com>
+AuthorDate: Tue Jul 28 00:51:37 2026 +0800
+Commit:     1173598855-dot <1173598855-dot@users.noreply.github.com>
+CommitDate: Tue Jul 28 00:51:37 2026 +0800
+
+    style: finish board column quick capture
+---
+ .superpowers/sdd/board-inline-task-2-report.md |  45 +++++++++
+ README.md                                      |   1 +
+ docs/optimization-roadmap.md                   | 126 +++++++++++++++++++++++++
+ src/app/App.css                                |  25 +++++
+ src/app/App.css.test.ts                        |  25 +++++
+ 5 files changed, 222 insertions(+)
+
+diff --git a/.superpowers/sdd/board-inline-task-2-report.md b/.superpowers/sdd/board-inline-task-2-report.md
+new file mode 100644
+index 0000000..67a1c85
+--- /dev/null
++++ b/.superpowers/sdd/board-inline-task-2-report.md
+@@ -0,0 +1,45 @@
++# Board Inline Task 2 Report
++
++## Changed files
++
++- `src/app/App.css.test.ts`
++- `src/app/App.css`
++- `README.md`
++- `docs/optimization-roadmap.md`
++
++## TDD evidence
++
++RED command:
++
++```powershell
++npm test -- src/app/App.css.test.ts -t "column quick add|full-height workbench"
++```
++
++Result: 1 file failed; 2 focused tests failed and 12 skipped. The failures correctly exposed the interrupted `.workspace { min-height: 0; }`, flex column-add wrapper, missing top gap, and undersized controls.
++
++GREEN command:
++
++```powershell
++npm test -- src/app/App.css.test.ts -t "column quick add|full-height workbench"
++```
++
++Result: 1 file passed; 2 focused tests passed and 12 skipped.
++
++## Fresh verification
++
++- `npm test -- src/app/App.css.test.ts`: 1 file, 14/14 tests passed.
++- `npm test`: 5 files, 89/89 tests passed.
++- `npm run build`: TypeScript and Vite production build passed; 1789 modules transformed.
++- `git diff --check`: exit 0; only Git line-ending conversion notices were emitted.
++
++## Self-review
++
++- Restored the validated `100dvh` workspace/rail/mobile-detail values, the calculated desktop column height, and established main-panel padding.
++- The column form is an unframed two-control grid, avoiding a framed container around already framed controls.
++- Input and button are both `40px` high at desktop and mobile widths, with existing focus and semantic color rules retained.
++- Removed the interrupted wrapper hover decoration, trailing whitespace, and extra EOF blank lines.
++- README and the optimization roadmap describe the unfiltered scope, correct-status creation, persistence, IME protection, and responsive behavior.
++
++## Concerns
++
++None. Real-browser acceptance remains part of the final combined verification rather than this CSS-only task report.
+diff --git a/README.md b/README.md
+index 507dca6..0f0c72e 100644
+--- a/README.md
++++ b/README.md
+@@ -14,6 +14,7 @@
+ - 按状态分组的看板式工作区
+ - 看板任务可拖到其他状态列，快速推进任务状态
+ - 同列任务可拖到其他任务前，手动顺序会保存到本地数据
++- 未启用筛选时，可在每个看板列中输入标题并按 `Enter` 或加号快速新建任务
+ - 渐进式快速新增：标题和添加动作常驻，完整任务字段按需展开
+ - 桌面紧凑筛选工作带与移动端筛选展开面板
+ - 覆盖式任务详情抽屉，不再持续挤压看板和列表空间
+diff --git a/docs/optimization-roadmap.md b/docs/optimization-roadmap.md
+new file mode 100644
+index 0000000..cffc498
+--- /dev/null
++++ b/docs/optimization-roadmap.md
+@@ -0,0 +1,126 @@
++# 优化路线图
++
++## GitHub 参考项目
++
++本项目学习的是公开开源任务/项目管理产品的产品模式和工程边界，不复制代码。
++
++- AppFlowy: 强调本地优先、数据可控、工作台式信息组织，适合借鉴“用户拥有数据”的方向。
++- Plane: 强项是现代项目管理中的看板、列表、筛选、优先级和任务推进，适合借鉴密集但克制的产品 UI。
++- Vikunja: 自托管待办应用，适合借鉴任务字段、日期、标签、项目组织和备份迁移。
++- Taiga: 典型敏捷任务流，适合借鉴状态推进和看板列的工作方式。
++- TaskTrove: 自托管 todo/kanban/calendar 组合，适合借鉴个人任务和日历视图的轻量组合。
++
++## 优化清单
++
++### 第一批：基础可用性和扫描效率
++
++- 修复界面、测试和文档中的中文乱码。
++- 增加任务排序：未完成优先，逾期/今天/未来/无日期，再按优先级和更新时间排序。
++- 增加“隐藏已完成任务”开关，让工作视图保持专注。
++- 为任务完成/删除按钮提供更明确的可访问名称。
++
++### 第二批：输入效率
++
++- 快捷键：`/` 聚焦搜索，`n` 聚焦新建任务标题，`1/2/3/4` 切换看板/列表/今日/已完成。
++- 在输入框、文本域和下拉框中输入时不触发全局快捷键。
++- `Escape` 可从当前表单控件失焦，方便继续使用全局快捷键。
++
++### 第三批：数据安全和导入体验
++
++- 导入前显示待导入任务数量，并提供替换/合并选择。
++- 有效 JSON 上传后先进入待确认状态，不立即覆盖当前任务。
++- 合并导入时跳过重复任务 id，避免误覆盖已有任务。
++- 支持取消一次待确认导入。
++
++### 第四批：视图能力
++
++- 今日视图扩展为“今天 + 逾期”的执行清单。
++- 增加已完成视图，减少主工作台噪音。
++- 视图切换保留统一的分段控制和键盘路径。
++
++### 第五批：空状态和筛选反馈
++
++- 筛选无结果时展示明确文案，并在当前视图内提供“清空筛选”。
++- 已完成视图为空时展示独立文案，避免误以为筛选异常。
++- 今日视图为空时说明今天和逾期任务都已处理完。
++
++### 第六批：交互增强
++
++- 看板跨列拖放移动任务状态。
++- 引入任务排序字段，支持同列手动排序。
++- 旧任务和旧备份导入时自动补齐排序字段。
++
++### 第七批：详情面板布局
++
++- 任务详情面板可从工具栏收起/恢复。
++- 详情面板头部提供关闭按钮，编辑时也能快速让出空间。
++- 收起后主内容区单列展开，减少窄屏和专注工作时的布局压力。
++
++### 第八批：批量操作
++
++- 看板和列表任务提供复选框选择。
++- 选择后显示批量操作条，支持批量完成、移动状态、删除。
++- 批量操作后自动清空选择并给出操作反馈。
++
++### 第九批：任务字段增强
++
++- 增加预计用时字段，用分钟记录任务所需时间。
++- 增加精力类型字段，支持低/中/高精力。
++- 任务卡片、列表行、快速新增和详情编辑同步展示/编辑新字段。
++- 旧任务和旧备份导入时自动补齐预计用时和精力字段。
++
++### 第十批：工作台上下文一致性与反馈
++
++- 顶部工作区状态按当前视图范围显示筛选数量，避免全局计数误导当前模块。
++- 筛选条件以标签形式展示，并可从工作区状态区统一清空。
++- 详情面板跟随当前视图和筛选结果，不显示已被隐藏的任务。
++- 详情面板空状态按当前视图显示上下文文案，避免与主列表空状态重复或误导。
++- 列表视图表头和行内容使用一致的 7 列网格，避免状态、优先级、日期、估时字段错位。
++- 窄屏列表保留状态、优先级、日期和估时元信息，避免移动端扫描任务时丢失关键字段。
++- 批量操作只作用于当前可见的已选任务，并在筛选/视图变化后清理不可见选择。
++- 已完成和今日视图遵守搜索、筛选、隐藏已完成等全局筛选语义。
++- 操作反馈消息使用可访问状态区域，让导入、导出、批量和拖拽结果可被辅助技术感知。
++- 新建任务成功后同样使用可访问状态区域反馈结果，补齐捕捉任务流程的确认感。
++
++### 第十一批：发布级稳定优化
++
++- 替换导入、删除和批量操作后清理失效选择，避免遗留过期的批量状态。
++- 工作台 UI 拆分为快速新建、工具栏、批量操作、任务视图和详情面板五个较小单元，任务状态仍由主工作台统一编排。
++- 任务领域规则和备份规则继续集中在既有模块中维护。
++- 当前 Vitest UI 覆盖创建、筛选、导入、拖拽、批量操作和详情行为。
++- 本批已完成，并已通过测试和构建验证。
++
++### 第十二批：看板列内快速新建
++
++- 未启用筛选时，每个看板状态列提供标题输入框，可按 `Enter` 或加号在对应状态中快速创建任务。
++- 新任务沿用现有领域默认值和本地持久化；已完成列任务自动记录完成时间。
++- 各列草稿互不影响，中文输入法组合态回车不会误提交，创建后可继续在当前输入框捕捉任务。
++- 启用搜索、筛选或隐藏已完成任务时隐藏列内入口，避免新任务因不匹配当前范围而立即消失。
++- 恢复全高工作台与侧栏滚动契约，桌面和移动端列内控件均保持至少 `40px` 高。
++- 本批已用 Vitest 覆盖列内创建、持久化、筛选、输入法和 CSS 布局契约，并通过构建与浏览器验收。
++
++## 当前批次结果
++
++第一批已经落地：中文乱码修复、排序、隐藏已完成任务、可访问名称增强，并用 Vitest 覆盖领域排序和 UI 行为。
++
++第二批已经落地：搜索、新建任务和视图切换快捷键，并覆盖输入态不误触发的测试。
++
++第三批已经落地：导入预览、替换/合并/取消确认、合并时跳过重复 id，并用 UI 测试覆盖导入前不覆盖和合并去重。
++
++第四批已经落地：今日视图包含逾期任务，已完成任务进入独立视图，并用 UI 测试覆盖两个视图行为。
++
++第五批已经落地：看板、列表、今日、已完成视图拥有更具体的空状态；筛选无结果时可在当前空状态里直接清空筛选，并用 UI 测试覆盖。
++
++第六批已经落地：看板任务可拖放到其他状态列，状态更新复用现有任务领域逻辑，并有轻量目标列高亮和移动反馈；新增 `sortOrder` 字段后，同列任务可拖到其他任务前，旧数据和旧备份会自动补齐排序字段。
++
++第七批已经落地：任务详情面板支持从工具栏或详情头部收起，并可恢复显示；收起时主内容区自动展开为单列。
++
++第八批已经落地：任务卡片和列表行支持复选框多选；批量操作条支持批量完成、移动到指定状态、删除，并用 UI 测试覆盖。
++
++第九批已经落地：任务模型新增 `estimateMinutes` 和 `energy`；快速新增、任务详情、卡片和列表都能展示/编辑预计用时和精力类型，旧数据和旧备份会自动补齐默认值。
++
++第十批已经落地：工作区状态摘要、筛选标签、清空筛选、详情同步、详情空状态语境、列表列对齐、窄屏列表元信息、批量选择范围、已完成/今日视图筛选一致性和新建/导入/导出/批量/拖拽操作反馈可访问性已经完成，并用 UI/CSS 回归测试覆盖关键场景。
++
++第十一批已经落地：失效选择清理、工作台组件拆分和发布级测试覆盖已经完成，并通过完整测试与构建验证。
++
++第十二批已经落地：未筛选看板支持按状态列快速新建标题任务，包含独立草稿、输入法保护、持久化、筛选范围保护和响应式触控尺寸回归测试。
+diff --git a/src/app/App.css b/src/app/App.css
+index 1eb4b74..23cec1e 100644
+--- a/src/app/App.css
++++ b/src/app/App.css
+@@ -688,6 +688,31 @@ button:focus-visible {
+   gap: 10px;
+ }
+ 
++.column-add {
++  display: grid;
++  grid-template-columns: minmax(0, 1fr) 40px;
++  gap: 6px;
++  margin-top: var(--space-3);
++}
++
++.column-add input {
++  min-height: 40px;
++  padding: 7px 10px;
++  font-size: 13px;
++}
++
++.column-add-btn {
++  width: 40px;
++  min-width: 40px;
++  height: 40px;
++  color: var(--accent);
++}
++
++.column-add-btn:disabled {
++  opacity: 0.4;
++  cursor: not-allowed;
++}
++
+ .task-card {
+   position: relative;
+   display: grid;
+diff --git a/src/app/App.css.test.ts b/src/app/App.css.test.ts
+index 3ffa1e1..5757251 100644
+--- a/src/app/App.css.test.ts
++++ b/src/app/App.css.test.ts
+@@ -117,6 +117,31 @@ describe('App.css', () => {
+     expect(getGridTemplateColumns('.content-grid')).toBe('minmax(0, 1fr)');
+   });
+ 
++  it('preserves the full-height workbench around compact board columns', () => {
++    const boardStyles = appCss.slice(appCss.indexOf('.board {'), appCss.indexOf('@media (max-width: 1180px)'));
++    const mobileBody = getMediaBody('(max-width: 720px)');
++
++    expect(getRuleBody('.workspace')).toContain('min-height: 100dvh');
++    expect(getRuleBody('.rail')).toContain('max-height: 100dvh');
++    expect(getRuleBodyFromSource(boardStyles, '.column')).toContain('min-height: calc(100dvh - 178px)');
++    expect(getRuleBodyFromSource(mobileBody, '.detail')).toContain('min-height: 100dvh');
++  });
++
++  it('keeps board column quick add compact and touch accessible', () => {
++    const columnAddRule = getRuleBody('.column-add');
++    const inputRule = getRuleBody('.column-add input');
++    const buttonRule = getRuleBody('.column-add-btn');
++    const mobileBody = getMediaBody('(max-width: 720px)');
++
++    expect(columnAddRule).toContain('display: grid');
++    expect(columnAddRule).toContain('grid-template-columns: minmax(0, 1fr) 40px');
++    expect(columnAddRule).toContain('margin-top: var(--space-3)');
++    expect(inputRule).toContain('min-height: 40px');
++    expect(buttonRule).toContain('min-width: 40px');
++    expect(buttonRule).toContain('height: 40px');
++    expect(getRuleBodyFromSource(mobileBody, '.column-add input')).not.toContain('min-height: 32px');
++  });
++
+   it('keeps filter overflow inside the work band and details in an overlay layer', () => {
+     expect(getRuleBody('.workband-filters')).toContain('overflow-x: auto');
+     expect(getRuleBody('.detail-layer')).toContain('position: fixed');

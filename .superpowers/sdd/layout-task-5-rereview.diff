@@ -1,0 +1,1094 @@
+# Review package: fb54f38..b54c056
+
+## Commits
+b54c056 fix: harden workbench accessibility
+c898eae style: optimize responsive task workbench
+
+## Files changed
+ .superpowers/sdd/layout-task-5-report.md | 110 ++++++++++
+ README.md                                |  64 ++++++
+ src/app/App.css                          | 335 +++++++++++++++++++++++++------
+ src/app/App.css.test.ts                  |  76 +++++++
+ 4 files changed, 522 insertions(+), 63 deletions(-)
+
+## Diff
+diff --git a/.superpowers/sdd/layout-task-5-report.md b/.superpowers/sdd/layout-task-5-report.md
+new file mode 100644
+index 0000000..f85a43f
+--- /dev/null
++++ b/.superpowers/sdd/layout-task-5-report.md
+@@ -0,0 +1,110 @@
++# Layout Task 5 Report
++
++## Status
++
++Complete. Responsive workbench styling, README updates, automated verification, and browser acceptance are finished. No task domain, storage, backup, drag, bulk, or import/export behavior was changed.
++
++## TDD Evidence
++
++Initial CSS contracts:
++
++- RED: `npm test -- src/app/App.css.test.ts` -> 7 tests, 3 failed. The failures showed the old `340px` rail, missing work-band/drawer rules, and missing mobile overflow/disclosure rules.
++- GREEN: `npm test -- src/app/App.css.test.ts` -> 7/7 passed after the responsive layout implementation.
++
++Visual regression found at 1024px:
++
++- RED: added a compact-rail backup-action contract; focused run -> 8 tests, 1 failed because the `<=1180px` single-track rule was absent.
++- GREEN: added `.backup-actions { grid-template-columns: 1fr; }` inside the intermediate breakpoint; focused run -> 8/8 passed.
++
++## Automated Verification
++
++- Final full suite: `npm test` -> 5 files, 68/68 tests passed, 0 failures.
++- Final build: `npm run build` -> TypeScript check and Vite production build passed; 1789 modules transformed, no application warnings.
++- `git diff --check` passed (Git only reported the repository's Windows line-ending conversion notice).
++
++## Browser Environment
++
++- Playwright CLI prerequisite: `npx 11.13.0` available.
++- CLI: `npx --yes --package @playwright/cli playwright-cli`, persistent named session `task5`.
++- Reused Vite server: `http://127.0.0.1:5173`, listener PID `29396`.
++- Each target viewport cleared `localStorage`, reloaded, and captured a fresh accessibility snapshot before interaction.
++
++## Viewport Results
++
++### 1440 x 900
++
++- Document `scrollWidth=1425 <= innerWidth=1440`; `scrollHeight=923`.
++- Rail width `280px`; main panel width `1144.67px`.
++- Filter work band `clientWidth=1103`, `scrollWidth=1103`, computed `overflow-x:auto` and remained one row.
++- Board `clientWidth=1105`, `scrollWidth=1238`; five stable tracks scroll only inside the board.
++- Quick-add details were initially absent, expanded on the disclosure command, and collapsed again.
++- Opening a board task produced a visible nonblank fixed drawer (`360 x 868`, text length 76); board width remained `1105px`.
++- Drawer close preserved `scrollY=13.33` and the selected card.
++- Console errors: 0, including no favicon 404.
++- Screenshot: `output/playwright/optimized-desktop.png`.
++
++### 1024 x 768
++
++- Document `scrollWidth=1009 <= innerWidth=1024`; page height remained internally vertical-scrollable without horizontal page overflow.
++- Rail width `250px`, computed sticky positioning.
++- Primary work band formed two rows (`47.33px` and `57.33px`).
++- Filter work band `clientWidth=717`, `scrollWidth=881`, computed `overflow-x:auto`.
++- Board `clientWidth=719`, `scrollWidth=1238`, so task columns scroll inside the canvas.
++- Drawer was `360px` wide and nonblank; board width stayed `719px`; closing preserved `scrollY=48` and selection.
++- Visual iteration changed backup actions to one column: both buttons measured `192 x 40` with no text wrapping or clipping.
++- Console errors: 0, including no favicon 404.
++- Screenshot: `output/playwright/optimized-tablet.png`.
++
++### 390 x 844
++
++- Document `scrollWidth=375 <= innerWidth=390`; final baseline `scrollHeight=1438`; no element bounds exceeded the page width.
++- Rail stacked above the canvas (`374.67px` wide, `position:static`); metrics remained four equal `83.17px` tracks.
++- Quick-add details were initially absent. Expanding rendered all 8 controls with 0 overflowing descendants.
++- Filters were initially `display:none`; disclosure changed them to a one-column grid with five `329.33px` selects, `overflow-x:visible`, and `aria-expanded=true`.
++- Board computed one `350.67px` column with visible overflow mode and no page overflow.
++- Mobile detail became a nonblank full-screen layer (`374.67 x 844`), scrim hidden, and controls remained scrollable and unobscured.
++- Closing detail preserved `scrollY=577.33`, removed the layer, and retained the selected card.
++- Console errors: 0, including no favicon 404.
++- Screenshot: `output/playwright/optimized-mobile.png`.
++
++## Visual Review
++
++All three required screenshots were opened at original resolution. Desktop structure and density were clean. The first tablet review exposed the three-line import label; the compact-rail single-column fix was applied and the tablet/mobile screenshots were recaptured. Final images show no overlapping text, clipped buttons, incoherent control resizing, broken images, or blank illustration boxes.
++
++The completed-view empty state was also exercised in the browser: its local SVG completed decoding with natural size `651 x 800`, rendered at `172.33 x 128`, and `brokenImages=0`.
++
++## Asset And Scope Audit
++
++- Scanned 3 SVGs in `src/assets/empty-states/`.
++- No `<script>`, `<image>`, `<foreignObject>`, external/data `href`, embedded `data:image`, or event-handler attributes were found.
++- Scoped source review includes only `src/app/App.css`, `src/app/App.css.test.ts`, and `README.md`.
++- No placeholders (`TBD`, `TODO`, or `implement later`) were introduced.
++
++## Concern
++
++No blocking concern. At desktop and tablet widths, the five board columns intentionally use internal horizontal scrolling to preserve the specified `238px` minimum task-column width.
++
++## Accessibility Follow-up (2026-07-26)
++
++### TDD Evidence
++
++- RED: against `HEAD c898eae`, the new accessibility contracts would fail: mobile task selection/action controls retained `24px`/`32px` dimensions, composite search/file controls lacked `:focus-within` rings, and the prior `--muted-soft`/`--warning-soft` palette did not meet the new 4.5 contrast requirement.
++- GREEN: fresh `npm test -- src/app/App.css.test.ts` -> 1 file, 11/11 tests passed. The three new contracts cover mobile 40px controls, composite focus rings, and WCAG contrast ratios.
++
++### Fresh Automated Verification
++
++- `npm test` -> 5 files, 71/71 tests passed, 0 failures.
++- `npm run build` -> TypeScript check and Vite production build passed; 1789 modules transformed.
++
++### Fresh Browser Acceptance (390 x 844)
++
++- Independent Playwright CLI session `task5-a11y` against the existing Vite server at `http://127.0.0.1:5173`.
++- With quick-add and mobile filters expanded, every visible button measured at least `40 x 40`: 13 buttons total, with the smallest dimensions `40 x 40`. All three visible `.select-task` labels measured `40 x 40`.
++- Tab focus reached the hidden file input and search input. Their parents both computed `border: 1px solid rgb(21, 94, 99)` and `box-shadow: rgba(21, 94, 99, 0.16) 0px 0px 0px 3px` while focused.
++- Opening a task showed the mobile drawer; its close target measured `40 x 40`. After closing, the layer was removed. Page overflow remained contained: `scrollWidth=390`, `innerWidth=390`.
++- Playwright console reported 0 errors and 0 warnings. Reviewed `output/playwright/optimized-mobile.png` and `output/playwright/mobile-drawer-check.png`; both were nonblank, legible, and free of clipping/overlap.
++
++### Contrast Measurements
++
++- `--muted-soft` (`#6b756f`) on white: `4.774:1`; on panel (`#fbfcfa`): `4.639:1` worst case.
++- `--warning` (`#b54a2f`) on `--warning-soft` (`#fff8f6`): `5.021:1`.
+diff --git a/README.md b/README.md
+new file mode 100644
+index 0000000..507dca6
+--- /dev/null
++++ b/README.md
+@@ -0,0 +1,64 @@
++# 个人任务管理库
++
++一个本地优先的个人任务管理工作台。当前版本使用 React、TypeScript、Vite 和 Vitest 构建，任务数据保存在浏览器 localStorage 中。
++
++## 功能
++
++- 创建、编辑、完成、重新打开、删除任务
++- 批量选择任务，并支持批量完成、移动状态和删除
++- 状态：收件箱、下一步、已安排、等待中、已完成
++- 优先级、截止日期、预计用时、精力类型、项目、标签、备注
++- 搜索与状态、优先级、日期、项目、标签筛选
++- 按紧急程度和日期自动排序，已完成任务默认排在后面
++- 可选隐藏已完成任务，保持工作视图清爽
++- 按状态分组的看板式工作区
++- 看板任务可拖到其他状态列，快速推进任务状态
++- 同列任务可拖到其他任务前，手动顺序会保存到本地数据
++- 渐进式快速新增：标题和添加动作常驻，完整任务字段按需展开
++- 桌面紧凑筛选工作带与移动端筛选展开面板
++- 覆盖式任务详情抽屉，不再持续挤压看板和列表空间
++- 本地打包的空状态插画，不依赖运行时外部资源
++- 看板、列表、今日、已完成四种视图切换
++- 今日视图会收纳今天到期和已经逾期的未完成任务
++- 空状态会区分筛选无结果、今日已清空、暂无已完成，并提供局部清空筛选入口
++- 快捷键：`/` 聚焦搜索，`n` 聚焦新建任务，`1/2/3/4` 切换看板/列表/今日/已完成
++- 导入 / 导出 JSON 任务备份
++- 导入前预览任务数量，并支持替换或合并到当前任务
++- 合并导入时会跳过重复任务 id，避免覆盖已有任务
++- 本地持久化，刷新后保留数据
++- 任务领域逻辑、备份导入导出和存储适配器测试
++
++## 开发
++
++```bash
++npm install
++npm run dev
++```
++
++## 测试
++
++```bash
++npm test
++```
++
++## 构建
++
++```bash
++npm run build
++```
++
++## 参考方向
++
++- AppFlowy：本地优先、数据可控、工作台式产品体验
++- Plane：看板、列表、任务筛选和现代项目管理边界
++- Vikunja：自托管待办模型、日期和标签组织
++- Taiga：敏捷任务流、状态推进和看板工作方式
++- TaskTrove：自托管个人任务、日历和看板组合
++
++## 当前边界
++
++工作台渲染已拆分为更清晰的 UI 组件，任务状态仍由主工作台统一编排。替换导入、删除和批量操作会清理失效选择，避免遗留过期的批量状态。快速新增、移动筛选和详情抽屉的展开状态是临时 UI 状态，不包含在任务备份数据中。
++
++当前版本不包含账号、云同步、多人协作和外部集成。看板已支持跨列拖放推进状态和同列手动排序，旧任务数据会自动补齐排序、预计用时和精力字段。
++
++导入不会立刻覆盖当前任务。选择“替换当前任务”会用导入文件覆盖现有数据；选择“合并到当前任务”会只加入新 id 的任务。
+diff --git a/src/app/App.css b/src/app/App.css
+index e9313ce..5f00bc8 100644
+--- a/src/app/App.css
++++ b/src/app/App.css
+@@ -1,26 +1,28 @@
+ :root {
+-  --surface-base: #f4f6f4;
+-  --surface-panel: #fbfcf8;
++  --surface-base: #f3f5f4;
++  --surface-panel: #fbfcfa;
+   --surface-raised: #ffffff;
+-  --surface-subtle: #edf2ee;
+-  --ink: #17201b;
+-  --muted: #4f5d55;
+-  --muted-soft: #6b766e;
+-  --line: #d6ded5;
+-  --line-strong: #bfc9bf;
+-  --accent: #1d4b4d;
+-  --accent-soft: #dfeee9;
+-  --danger: #8f2f28;
+-  --danger-soft: #f4e2de;
+-  --warning: #9a3f27;
+-  --warning-soft: #f5e4dd;
++  --surface-subtle: #edf1ef;
++  --ink: #18201d;
++  --muted: #59645f;
++  --muted-soft: #6b756f;
++  --line: #d7dedb;
++  --line-strong: #bec9c4;
++  --accent: #155e63;
++  --accent-soft: #deeeee;
++  --support: #526a88;
++  --support-soft: #e8edf3;
++  --danger: #a33a32;
++  --danger-soft: #f5e3e0;
++  --warning: #b54a2f;
++  --warning-soft: #fff8f6;
+   --radius-sm: 6px;
+   --radius-md: 8px;
+   --space-1: 4px;
+   --space-2: 8px;
+   --space-3: 12px;
+   --space-4: 16px;
+   --space-5: 20px;
+   --space-6: 24px;
+   color: var(--ink);
+   background: var(--surface-base);
+@@ -29,126 +31,170 @@
+   text-rendering: optimizeLegibility;
+ }
+ 
+ * {
+   box-sizing: border-box;
+ }
+ 
+ body {
+   margin: 0;
+   min-width: 320px;
++  overflow-x: hidden;
+ }
+ 
+ button,
+ input,
+ select,
+ textarea {
+   font: inherit;
+ }
+ 
+ button {
+   cursor: pointer;
+ }
+ 
+ .workspace {
+   display: grid;
+-  grid-template-columns: 340px minmax(0, 1fr);
+-  min-height: 100vh;
++  grid-template-columns: 280px minmax(0, 1fr);
++  min-height: 100dvh;
+   background: var(--surface-base);
+ }
+ 
+ .rail {
++  position: sticky;
++  top: 0;
+   display: flex;
+   flex-direction: column;
+-  gap: var(--space-5);
+-  padding: var(--space-6);
++  gap: 14px;
++  max-height: 100dvh;
++  overflow-y: auto;
++  padding: 18px;
+   border-right: 1px solid var(--line);
+   background: var(--surface-panel);
+ }
+ 
+ .brand-block {
+   display: flex;
+   align-items: center;
+   gap: 14px;
+ }
+ 
+ .brand-mark {
+   display: grid;
+-  width: 48px;
+-  height: 48px;
++  width: 42px;
++  min-width: 42px;
++  height: 42px;
+   place-items: center;
+   border: 2px solid var(--accent);
+   border-radius: var(--radius-md);
+   color: var(--accent);
+   font-weight: 800;
+ }
+ 
+ h1,
+ h2,
+ h3,
+ p {
+   margin: 0;
+ }
+ 
+ h1 {
+-  font-size: 21px;
+-  line-height: 1.15;
++  font-size: 19px;
++  line-height: 1.2;
+   text-wrap: balance;
+ }
+ 
+ h2,
+ h3 {
+   text-wrap: balance;
+ }
+ 
+ .brand-block p,
+ .task-card p,
+ .message {
+   color: var(--muted);
+   font-size: 13px;
+ }
+ 
+ .metric-grid {
+   display: grid;
+-  grid-template-columns: repeat(2, 1fr);
+-  gap: var(--space-2);
++  grid-template-columns: repeat(4, minmax(0, 1fr));
++  gap: 6px;
+ }
+ 
+ .metric-grid div,
+ .quick-add,
+ .detail,
+ .column {
+   border: 1px solid var(--line);
+   border-radius: var(--radius-md);
+   background: var(--surface-panel);
+ }
+ 
+ .metric-grid div {
+-  padding: 14px;
++  min-width: 0;
++  padding: 8px 4px;
++  text-align: center;
+ }
+ 
+ .metric-grid strong {
+   display: block;
+   color: var(--warning);
+-  font-size: 27px;
++  font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", monospace;
++  font-size: 20px;
++  font-variant-numeric: tabular-nums;
+   line-height: 1;
+ }
+ 
+ .metric-grid span {
++  display: block;
++  margin-top: 5px;
+   color: var(--muted);
+-  font-size: 12px;
++  font-size: 11px;
++  line-height: 1.2;
+ }
+ 
+ .quick-add {
+   display: grid;
+   gap: var(--space-2);
+-  padding: var(--space-4);
++  padding: var(--space-3);
++}
++
++.quick-capture-row {
++  display: grid;
++  grid-template-columns: minmax(0, 1fr) 42px;
++  gap: 8px;
++}
++
++.quick-capture-row > button:not(.primary) {
++  display: inline-grid;
++  width: 42px;
++  height: 42px;
++  place-items: center;
++  border: 1px solid var(--line-strong);
++  border-radius: 7px;
++  color: var(--support);
++  background: var(--surface-raised);
++}
++
++.quick-capture-row > button:not(.primary):hover {
++  border-color: var(--support);
++  background: var(--support-soft);
++}
++
++.quick-capture-row .primary {
++  grid-column: 1 / -1;
++}
++
++.quick-add-fields {
++  display: grid;
++  gap: 8px;
+ }
+ 
+ .quick-add h2,
+ .column-title h2 {
+   font-size: 14px;
+ }
+ 
+ input,
+ select,
+ textarea {
+@@ -181,21 +227,31 @@ input:hover,
+ select:hover,
+ textarea:hover {
+   border-color: var(--accent);
+ }
+ 
+ input:focus,
+ select:focus,
+ textarea:focus,
+ button:focus-visible {
+   border-color: var(--accent);
+-  box-shadow: 0 0 0 3px rgba(29, 75, 77, 0.16);
++  box-shadow: 0 0 0 3px rgba(21, 94, 99, 0.16);
++}
++
++.search-box:focus-within {
++  border-color: var(--accent);
++  box-shadow: 0 0 0 3px rgba(21, 94, 99, 0.16);
++}
++
++.file-action:focus-within {
++  border-color: var(--accent);
++  box-shadow: 0 0 0 3px rgba(21, 94, 99, 0.16);
+ }
+ 
+ .form-row {
+   display: grid;
+   grid-template-columns: 1fr 1fr;
+   gap: var(--space-2);
+ }
+ 
+ .primary,
+ .danger,
+@@ -231,28 +287,33 @@ button:focus-visible {
+ .primary:disabled {
+   cursor: not-allowed;
+   border-color: var(--line-strong);
+   color: var(--muted-soft);
+   background: var(--surface-subtle);
+   opacity: 1;
+ }
+ 
+ .main-panel {
+   min-width: 0;
+-  padding: var(--space-6);
++  padding: 18px 20px 24px;
+ }
+ 
+ .toolbar {
+   display: grid;
+-  grid-template-columns: minmax(300px, auto) minmax(300px, 1fr) minmax(260px, 360px);
+-  gap: var(--space-3);
+-  margin-bottom: var(--space-4);
++  gap: 8px;
++  margin-bottom: 8px;
++}
++
++.workband-primary {
++  display: grid;
++  grid-template-columns: auto minmax(240px, 1fr) minmax(220px, 320px) 40px;
++  align-items: stretch;
+ }
+ 
+ .search-box,
+ .workspace-status,
+ .filter-strip,
+ .view-switch {
+   border: 1px solid var(--line);
+   border-radius: var(--radius-md);
+   background: var(--surface-panel);
+ }
+@@ -260,35 +321,35 @@ button:focus-visible {
+ .search-box,
+ .filter-strip {
+   display: flex;
+   align-items: center;
+   gap: var(--space-2);
+   padding: var(--space-2) 10px;
+ }
+ 
+ .view-switch {
+   display: inline-grid;
+-  grid-template-columns: repeat(4, minmax(74px, 1fr));
++  grid-template-columns: repeat(4, minmax(66px, 1fr));
+   gap: var(--space-1);
+   align-self: stretch;
+   padding: var(--space-1);
+ }
+ 
+ .view-switch button {
+   display: inline-flex;
+   align-items: center;
+   justify-content: center;
+   gap: 6px;
+   min-height: 38px;
+   border: 1px solid transparent;
+   border-radius: var(--radius-sm);
+-  padding: 0 10px;
++  padding: 0 8px;
+   color: var(--muted);
+   background: transparent;
+   font-size: 13px;
+   font-weight: 800;
+ }
+ 
+ .view-switch button:hover,
+ .clear-filter:hover,
+ .icon-button:hover {
+   background: var(--accent-soft);
+@@ -305,21 +366,21 @@ button:focus-visible {
+   background: transparent;
+   box-shadow: none;
+ }
+ 
+ .workspace-status {
+   display: grid;
+   grid-template-columns: minmax(0, 1fr) auto;
+   align-items: center;
+   gap: 6px var(--space-2);
+   min-height: 48px;
+-  padding: 8px 10px;
++  padding: 6px 10px;
+ }
+ 
+ .workspace-status strong {
+   min-width: 0;
+   color: var(--ink);
+   font-size: 13px;
+   line-height: 1.2;
+ }
+ 
+ .workspace-status .clear-filter {
+@@ -333,36 +394,63 @@ button:focus-visible {
+   flex-wrap: wrap;
+   gap: 5px;
+   min-width: 0;
+ }
+ 
+ .filter-chips span {
+   max-width: 100%;
+   overflow: hidden;
+   border-radius: 999px;
+   padding: 3px 7px;
+-  color: var(--muted);
+-  background: var(--surface-subtle);
++  color: var(--support);
++  background: var(--support-soft);
+   font-size: 11px;
+   font-weight: 700;
+   line-height: 1.25;
+   text-overflow: ellipsis;
+   white-space: nowrap;
+ }
+ 
+ .filter-strip {
+   grid-column: 1 / -1;
+-  flex-wrap: wrap;
+ }
+ 
+-.filter-strip select {
+-  min-width: 118px;
++.workband-filters {
++  display: flex;
++  min-width: 0;
++  margin-bottom: var(--space-4);
++  overflow-x: auto;
++  flex-wrap: nowrap;
++  scrollbar-width: thin;
++  scrollbar-color: var(--line-strong) transparent;
++}
++
++.workband-filters select {
++  width: auto;
++  min-width: 132px;
++  flex: 0 0 auto;
++}
++
++.workband-filters > button {
++  flex: 0 0 auto;
++  min-height: 40px;
++  white-space: nowrap;
++  border: 1px solid var(--line-strong);
++  border-radius: 7px;
++  padding: 0 12px;
++  color: var(--support);
++  background: var(--support-soft);
++  font-weight: 700;
++}
++
++.mobile-filter-toggle {
++  display: none;
+ }
+ 
+ .clear-filter {
+   display: inline-flex;
+   align-items: center;
+   justify-content: center;
+   gap: 6px;
+   min-height: 40px;
+   white-space: nowrap;
+   border: 1px solid var(--line-strong);
+@@ -438,22 +526,21 @@ button:focus-visible {
+   width: 1px;
+   height: 1px;
+   overflow: hidden;
+   clip: rect(0 0 0 0);
+   clip-path: inset(50%);
+   white-space: nowrap;
+ }
+ 
+ .content-grid {
+   display: grid;
+-  grid-template-columns: minmax(0, 1fr) 300px;
+-  gap: var(--space-4);
++  grid-template-columns: minmax(0, 1fr);
+   align-items: start;
+ }
+ 
+ .content-grid.detail-collapsed {
+   grid-template-columns: minmax(0, 1fr);
+ }
+ 
+ .bulk-actions {
+   display: flex;
+   flex-wrap: wrap;
+@@ -488,29 +575,34 @@ button:focus-visible {
+   background: var(--danger-soft);
+   font-weight: 800;
+ }
+ 
+ .danger-action:hover {
+   background: #efd4ce;
+ }
+ 
+ .board {
+   display: grid;
+-  grid-template-columns: repeat(5, minmax(210px, 1fr));
++  grid-template-columns: repeat(5, minmax(238px, 1fr));
+   gap: var(--space-3);
+   overflow-x: auto;
+   padding-bottom: var(--space-2);
++  scrollbar-width: thin;
+ }
+ 
+ .task-table {
+   display: grid;
+   gap: var(--space-2);
++  min-width: 0;
++  overflow-x: auto;
++  padding: 2px;
++  scrollbar-width: thin;
+ }
+ 
+ .table-head {
+   display: grid;
+   grid-template-columns: 24px 36px minmax(220px, 1fr) 92px 76px 96px 76px 36px;
+   gap: 10px;
+   align-items: center;
+   min-height: 28px;
+   padding: 0 10px;
+   color: var(--muted);
+@@ -555,21 +647,21 @@ button:focus-visible {
+   display: block;
+   margin-top: 3px;
+   color: var(--muted);
+   font-size: 12px;
+   overflow: hidden;
+   text-overflow: ellipsis;
+   white-space: nowrap;
+ }
+ 
+ .column {
+-  min-height: 520px;
++  min-height: calc(100dvh - 178px);
+   padding: var(--space-3);
+   transition: border-color 160ms ease, background-color 160ms ease;
+ }
+ 
+ .column.drop-target {
+   border-color: var(--accent);
+   background: var(--accent-soft);
+ }
+ 
+ .column-title {
+@@ -673,30 +765,45 @@ button:focus-visible {
+   color: var(--warning);
+   background: var(--warning-soft);
+ }
+ 
+ .priority.urgent {
+   color: #7c2631;
+   background: #f3dce0;
+ }
+ 
+ .priority.low {
+-  color: #37634a;
+-  background: var(--accent-soft);
++  color: var(--support);
++  background: var(--support-soft);
++}
++
++.detail-layer {
++  position: fixed;
++  inset: 0;
++  z-index: 30;
++}
++
++.detail-scrim {
++  position: absolute;
++  inset: 0;
++  background: rgba(24, 32, 29, 0.18);
+ }
+ 
+ .detail {
+-  position: sticky;
+-  top: var(--space-6);
++  position: absolute;
++  inset: 16px 16px 16px auto;
+   display: grid;
++  width: min(360px, calc(100vw - 32px));
+   gap: var(--space-3);
++  overflow-y: auto;
+   padding: var(--space-4);
++  box-shadow: 0 18px 48px rgba(24, 32, 29, 0.18);
+ }
+ 
+ .detail-header {
+   display: flex;
+   align-items: center;
+   justify-content: space-between;
+ }
+ 
+ .detail-actions {
+   display: inline-flex;
+@@ -748,98 +855,200 @@ button:focus-visible {
+   width: fit-content;
+   justify-self: center;
+ }
+ 
+ .board-empty {
+   grid-column: 1 / -1;
+ }
+ 
+ @media (max-width: 1180px) {
+   .workspace {
+-    grid-template-columns: 1fr;
++    grid-template-columns: 250px minmax(0, 1fr);
+   }
+ 
+   .rail {
+-    border-right: 0;
+-    border-bottom: 1px solid var(--line);
++    padding: 16px;
+   }
+ 
+-  .toolbar,
+-  .content-grid {
++  .backup-actions {
+     grid-template-columns: 1fr;
+   }
+ 
+-  .filter-strip {
+-    grid-column: auto;
++  .workband-primary {
++    grid-template-columns: minmax(280px, 1fr) minmax(220px, 320px) 40px;
+   }
+ 
+-  .detail {
++  .view-switch {
++    grid-column: 1 / -1;
++  }
++}
++
++@media (max-width: 900px) {
++  .workspace {
++    grid-template-columns: 1fr;
++  }
++
++  .rail {
+     position: static;
++    max-height: none;
++    overflow: visible;
++    border-right: 0;
++    border-bottom: 1px solid var(--line);
+   }
+ }
+ 
+ @media (max-width: 720px) {
+   .rail,
+   .main-panel {
+-    padding: var(--space-4);
++    padding: 12px;
++  }
++
++  .metric-grid {
++    grid-template-columns: repeat(4, minmax(0, 1fr));
++  }
++
++  .workband-primary {
++    grid-template-columns: 1fr 40px;
+   }
+ 
+-  .toolbar,
+-  .filter-strip {
+-    align-items: stretch;
++  .view-switch,
++  .search-box,
++  .workspace-status {
++    grid-column: 1 / -1;
++  }
++
++  .workband-primary > .icon-button {
++    grid-row: 4;
++    grid-column: 2;
++    width: 40px;
++    height: 40px;
++  }
++
++  .mobile-filter-toggle {
++    display: inline-flex;
++    grid-row: 4;
++    grid-column: 1;
++    align-items: center;
++    justify-content: center;
++    gap: 7px;
++    min-width: 0;
++    min-height: 40px;
++    border: 1px solid var(--line-strong);
++    border-radius: 7px;
++    color: var(--support);
++    background: var(--support-soft);
++    font-weight: 700;
++  }
++
++  .mobile-filter-toggle strong {
++    display: inline-grid;
++    min-width: 20px;
++    height: 20px;
++    place-items: center;
++    border-radius: 999px;
++    color: #ffffff;
++    background: var(--support);
++    font-size: 11px;
+   }
+ 
+   .workspace-status {
+     grid-template-columns: 1fr;
+   }
+ 
+   .workspace-status .clear-filter {
+     grid-row: auto;
+     grid-column: auto;
++    min-height: 40px;
+   }
+ 
+   .view-switch {
+     grid-template-columns: 1fr 1fr;
+   }
+ 
+-  .filter-strip {
++  .view-switch button {
++    min-height: 40px;
++  }
++
++  .filter-strip:not(.mobile-expanded) {
++    display: none;
++  }
++
++  .workband-filters.mobile-expanded {
+     display: grid;
+     grid-template-columns: 1fr;
++    overflow: visible;
++  }
++
++  .workband-filters.mobile-expanded select {
++    width: 100%;
+   }
+ 
+   .toggle-filter {
+     justify-content: flex-start;
+   }
+ 
+   .detail-toggle {
+     justify-content: center;
+   }
+ 
+   .bulk-actions select {
+     width: 100%;
+   }
+ 
+   .form-row {
+     grid-template-columns: 1fr;
+   }
+ 
++  .task-card {
++    grid-template-columns: 40px 40px minmax(0, 1fr);
++  }
++
++  .select-task {
++    width: 40px;
++    min-width: 40px;
++    height: 40px;
++  }
++
++  .icon-button {
++    width: 40px;
++    min-width: 40px;
++    height: 40px;
++  }
++
+   .board {
+     grid-template-columns: 1fr;
+     overflow: visible;
+   }
+ 
+   .column {
+     min-height: auto;
+   }
+ 
++  .detail-layer {
++    background: var(--surface-panel);
++  }
++
++  .detail-scrim {
++    display: none;
++  }
++
++  .detail {
++    inset: 0;
++    width: 100%;
++    min-height: 100dvh;
++    border: 0;
++    border-radius: 0;
++    box-shadow: none;
++  }
++
+   .table-row {
+-    grid-template-columns: 24px 36px minmax(0, 1fr);
++    grid-template-columns: 40px 40px minmax(0, 1fr);
+     align-items: start;
+   }
+ 
+   .table-head {
+     display: none;
+   }
+ 
+   .table-row > span {
+     grid-column: 3;
+     justify-self: start;
+diff --git a/src/app/App.css.test.ts b/src/app/App.css.test.ts
+index 7ae5ce4..a3e4110 100644
+--- a/src/app/App.css.test.ts
++++ b/src/app/App.css.test.ts
+@@ -53,20 +53,36 @@ function splitGridTracks(template: string): string[] {
+ 
+     if (char === '(') depth += 1;
+     if (char === ')') depth = Math.max(0, depth - 1);
+     current += char;
+   }
+ 
+   if (current.trim()) tracks.push(current.trim());
+   return tracks;
+ }
+ 
++function getCssVariable(name: string): string {
++  return getRuleBody(':root').match(new RegExp(`${name}:\\s*(#[0-9a-fA-F]{6})\\s*;`))?.[1] ?? '';
++}
++
++function relativeLuminance(hex: string): number {
++  const channels = [hex.slice(1, 3), hex.slice(3, 5), hex.slice(5, 7)].map((channel) => Number.parseInt(channel, 16) / 255);
++  const [red, green, blue] = channels.map((channel) => (channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4));
++  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
++}
++
++function contrastRatio(foreground: string, background: string): number {
++  const foregroundLuminance = relativeLuminance(foreground);
++  const backgroundLuminance = relativeLuminance(background);
++  return (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) / (Math.min(foregroundLuminance, backgroundLuminance) + 0.05);
++}
++
+ describe('App.css', () => {
+   it('keeps list table columns aligned with the rendered cells', () => {
+     const headerColumns = getGridTemplateColumns('.table-head');
+     const rowColumns = getGridTemplateColumns('.table-row');
+ 
+     expect(appCss).toContain('.table-head');
+     expect(headerColumns).not.toBe('');
+     expect(headerColumns).toBe(rowColumns);
+     expect(splitGridTracks(headerColumns)).toHaveLength(8);
+   });
+@@ -87,11 +103,71 @@ describe('App.css', () => {
+     expect(artworkRule).toContain('max-height: 128px');
+     expect(artworkRule).toContain('object-fit: contain');
+   });
+ 
+   it('uses a non-shadow visible selection state for list rows', () => {
+     const selectedRowRule = getRuleBody('.table-row.selected');
+ 
+     expect(selectedRowRule).not.toContain('box-shadow');
+     expect(selectedRowRule).toContain('outline: 2px solid var(--accent)');
+   });
++
++  it('reserves a compact rail and full-width task canvas', () => {
++    expect(getGridTemplateColumns('.workspace')).toBe('280px minmax(0, 1fr)');
++    expect(getGridTemplateColumns('.metric-grid')).toBe('repeat(4, minmax(0, 1fr))');
++    expect(getGridTemplateColumns('.content-grid')).toBe('minmax(0, 1fr)');
++  });
++
++  it('keeps filter overflow inside the work band and details in an overlay layer', () => {
++    expect(getRuleBody('.workband-filters')).toContain('overflow-x: auto');
++    expect(getRuleBody('.detail-layer')).toContain('position: fixed');
++    expect(getRuleBody('.detail')).toContain('width: min(360px, calc(100vw - 32px))');
++  });
++
++  it('collapses optional controls on mobile without horizontal page overflow', () => {
++    const mobileBody = getMediaBody('(max-width: 720px)');
++    expect(getRuleBody('body')).toContain('overflow-x: hidden');
++    expect(getRuleBodyFromSource(mobileBody, '.filter-strip:not(.mobile-expanded)')).toContain('display: none');
++    expect(getRuleBodyFromSource(mobileBody, '.detail')).toContain('width: 100%');
++  });
++
++  it('keeps backup actions readable in the compact rail', () => {
++    const intermediateBody = getMediaBody('(max-width: 1180px)');
++    expect(getRuleBodyFromSource(intermediateBody, '.backup-actions')).toContain('grid-template-columns: 1fr');
++  });
++
++  it('keeps mobile task controls at least 40px on both axes', () => {
++    const mobileBody = getMediaBody('(max-width: 720px)');
++    const viewButtonRule = getRuleBodyFromSource(mobileBody, '.view-switch button');
++    const selectTaskRule = getRuleBodyFromSource(mobileBody, '.select-task');
++    const iconButtonRule = getRuleBodyFromSource(mobileBody, '.icon-button');
++
++    expect(viewButtonRule).toContain('min-height: 40px');
++    expect(selectTaskRule).toContain('width: 40px');
++    expect(selectTaskRule).toContain('height: 40px');
++    expect(iconButtonRule).toContain('width: 40px');
++    expect(iconButtonRule).toContain('height: 40px');
++    expect(getRuleBodyFromSource(mobileBody, '.task-card')).toContain('grid-template-columns: 40px 40px minmax(0, 1fr)');
++    expect(getRuleBodyFromSource(mobileBody, '.table-row')).toContain('grid-template-columns: 40px 40px minmax(0, 1fr)');
++    expect(getRuleBodyFromSource(mobileBody, '.workspace-status .clear-filter')).toContain('min-height: 40px');
++  });
++
++  it('shows a visible focus ring on composite search and file controls', () => {
++    for (const selector of ['.search-box:focus-within', '.file-action:focus-within']) {
++      const focusRule = getRuleBody(selector);
++      expect(focusRule).toContain('border-color: var(--accent)');
++      expect(focusRule).toContain('box-shadow: 0 0 0 3px');
++    }
++  });
++
++  it('keeps secondary and warning text contrast at or above 4.5', () => {
++    const mutedSoft = getCssVariable('--muted-soft');
++    const warning = getCssVariable('--warning');
++    const warningSoft = getCssVariable('--warning-soft');
++    const mutedBackgrounds = [getCssVariable('--surface-raised'), getCssVariable('--surface-panel')];
++    const mutedWorstCase = Math.min(...mutedBackgrounds.map((background) => contrastRatio(mutedSoft, background)));
++    const warningWorstCase = contrastRatio(warning, warningSoft);
++
++    expect(mutedWorstCase).toBeGreaterThanOrEqual(4.5);
++    expect(warningWorstCase).toBeGreaterThanOrEqual(4.5);
++  });
+ });

@@ -1,0 +1,419 @@
+# Review package: da0348a..fb54f38
+
+## Commits
+fb54f38 feat: move task details into an overlay drawer
+
+## Files changed
+ .superpowers/sdd/layout-task-4-report.md  | 51 +++++++++++++++++++++++++++++++
+ src/features/tasks/TaskViews.tsx          |  6 ++--
+ src/features/tasks/TaskWorkspace.test.tsx | 27 ++++++++++++++--
+ src/features/tasks/TaskWorkspace.tsx      | 14 +++++----
+ 4 files changed, 85 insertions(+), 13 deletions(-)
+
+## Diff
+diff --git a/.superpowers/sdd/layout-task-4-report.md b/.superpowers/sdd/layout-task-4-report.md
+new file mode 100644
+index 0000000..65904b9
+--- /dev/null
++++ b/.superpowers/sdd/layout-task-4-report.md
+@@ -0,0 +1,51 @@
++# Layout Task 4 Report
++
++## Scope
++
++Moved task details out of the task canvas into a conditional overlay layer. The workspace now owns the default-closed drawer state and preserves `selectedId` across close and reopen. Direct board and list task activation opens the drawer; checkbox and completion-button propagation behavior remains unchanged.
++
++## RED
++
++Command:
++
++```powershell
++npm test -- src/features/tasks/TaskWorkspace.test.tsx -t "detail drawer|selected task"
++```
++
++Result: failed as expected. The new drawer test found `任务详情` in the initial render because `showDetail` was still `true`; the implementation also had no `任务详情层`.
++
++## GREEN And Verification
++
++Commands:
++
++```powershell
++npm test -- src/features/tasks/TaskWorkspace.test.tsx -t "detail|drawer|selected task"
++npm test -- src/features/tasks/TaskWorkspace.test.tsx
++npm run build
++```
++
++Results:
++
++- Focused detail/drawer coverage: 13 passed, 27 skipped.
++- Full `TaskWorkspace` suite: 40 passed.
++- Production build: passed (`tsc --noEmit && vite build`).
++
++During final verification, the existing combined keyboard-shortcut test exposed a timing-dependent assertion: the `n` handler focuses on `requestAnimationFrame`, but the test asserted synchronously. It now uses the same `waitFor` condition as the dedicated shortcut-focus test; the focused keyboard test passes.
++
++## Files
++
++- `src/features/tasks/TaskWorkspace.tsx`
++- `src/features/tasks/TaskViews.tsx`
++- `src/features/tasks/TaskWorkspace.test.tsx`
++- `.superpowers/sdd/layout-task-4-report.md`
++
++## Self-Review
++
++- `showDetail` defaults to `false`; closing only changes drawer visibility and does not clear `selectedId`.
++- `.content-grid` contains only `TaskViews`, while `.detail-layer`, its aria-hidden scrim, and `TaskDetailPanel` are sibling overlay content.
++- Board cards and list rows use `onOpenDetail(task)`; checkbox and completion button handlers still stop propagation.
++- No task-domain, storage, backup, import/export, bulk-action, or Task 5 CSS changes were made.
++
++## Concern
++
++The overlay layer has no new styling in this task by design; positioning and visual drawer treatment are reserved for Task 5 CSS.
+diff --git a/src/features/tasks/TaskViews.tsx b/src/features/tasks/TaskViews.tsx
+index f281c1e..f46b72b 100644
+--- a/src/features/tasks/TaskViews.tsx
++++ b/src/features/tasks/TaskViews.tsx
+@@ -12,21 +12,20 @@ export interface TaskViewsProps {
+   filteredTasks: Task[];
+   todayTasks: Task[];
+   completedTasks: Task[];
+   groups: TaskGroups;
+   selectedTask: Task | undefined;
+   selectedTaskIds: string[];
+   draggedTaskId: string;
+   dragOverStatus: TaskStatus | '';
+   hasActiveFilters: boolean;
+   onClearFilters: () => void;
+-  onSelectTask: (taskId: string) => void;
+   onToggleTaskSelection: (taskId: string) => void;
+   onToggleDone: (task: Task) => void;
+   onOpenDetail: (task: Task) => void;
+   onTaskDragStart: (event: DragEvent<HTMLElement>, task: Task) => void;
+   onTaskDragEnd: () => void;
+   onTaskDragOver: (event: DragEvent<HTMLElement>, status: TaskStatus) => void;
+   onTaskDrop: (event: DragEvent<HTMLElement>, task: Task) => void;
+   onColumnDragOver: (event: DragEvent<HTMLElement>, status: TaskStatus) => void;
+   onColumnDragLeave: () => void;
+   onColumnDrop: (event: DragEvent<HTMLElement>, status: TaskStatus) => void;
+@@ -37,21 +36,20 @@ export function TaskViews({
+   filteredTasks,
+   todayTasks,
+   completedTasks,
+   groups,
+   selectedTask,
+   selectedTaskIds,
+   draggedTaskId,
+   dragOverStatus,
+   hasActiveFilters,
+   onClearFilters,
+-  onSelectTask,
+   onToggleTaskSelection,
+   onToggleDone,
+   onOpenDetail,
+   onTaskDragStart,
+   onTaskDragEnd,
+   onTaskDragOver,
+   onTaskDrop,
+   onColumnDragOver,
+   onColumnDragLeave,
+   onColumnDrop,
+@@ -59,21 +57,21 @@ export function TaskViews({
+   function renderTaskCard(task: Task) {
+     return (
+       <article
+         className={`task-card ${selectedTask?.id === task.id ? 'selected' : ''} ${draggedTaskId === task.id ? 'dragging' : ''}`}
+         key={task.id}
+         draggable
+         onDragStart={(event) => onTaskDragStart(event, task)}
+         onDragEnd={onTaskDragEnd}
+         onDragOver={(event) => onTaskDragOver(event, task.status)}
+         onDrop={(event) => onTaskDrop(event, task)}
+-        onClick={() => onSelectTask(task.id)}
++        onClick={() => onOpenDetail(task)}
+       >
+         <label className="select-task" onClick={(event) => event.stopPropagation()}>
+           <input type="checkbox" aria-label={`选择任务：${task.title}`} checked={selectedTaskIds.includes(task.id)} onChange={() => onToggleTaskSelection(task.id)} />
+         </label>
+         <button
+           className="icon-button"
+           type="button"
+           aria-label={`切换完成：${task.title}`}
+           onClick={(event) => {
+             event.stopPropagation();
+@@ -123,21 +121,21 @@ export function TaskViews({
+               <span />
+               <span />
+               <span>任务</span>
+               <span>状态</span>
+               <span>优先级</span>
+               <span>日期</span>
+               <span>预计</span>
+               <span />
+             </div>
+             {tasksToRender.map((task) => (
+-              <article className={`table-row ${selectedTask?.id === task.id ? 'selected' : ''}`} key={task.id} onClick={() => onSelectTask(task.id)}>
++              <article className={`table-row ${selectedTask?.id === task.id ? 'selected' : ''}`} key={task.id} onClick={() => onOpenDetail(task)}>
+                 <label className="select-task" onClick={(event) => event.stopPropagation()}>
+                   <input type="checkbox" aria-label={`选择任务：${task.title}`} checked={selectedTaskIds.includes(task.id)} onChange={() => onToggleTaskSelection(task.id)} />
+                 </label>
+                 <button
+                   className="icon-button"
+                   type="button"
+                   aria-label={`切换完成：${task.title}`}
+                   onClick={(event) => {
+                     event.stopPropagation();
+                     onToggleDone(task);
+diff --git a/src/features/tasks/TaskWorkspace.test.tsx b/src/features/tasks/TaskWorkspace.test.tsx
+index cefa1be..ef919ac 100644
+--- a/src/features/tasks/TaskWorkspace.test.tsx
++++ b/src/features/tasks/TaskWorkspace.test.tsx
+@@ -177,28 +177,43 @@ describe('TaskWorkspace', () => {
+ 
+     await user.click(screen.getByLabelText('选择任务：整理本周重点任务'));
+     await user.click(screen.getByLabelText('选择任务：任务管理库第一篇文档'));
+     await user.click(screen.getByRole('button', { name: '批量删除' }));
+ 
+     expect(screen.getByText('已删除 2 个任务。')).toBeInTheDocument();
+     expect(screen.queryByText('整理本周重点任务')).not.toBeInTheDocument();
+     expect(screen.queryByText('任务管理库第一篇文档')).not.toBeInTheDocument();
+   });
+ 
+-  it('opens the task detail panel when a board card is selected', async () => {
++  it('opens the detail drawer from a board card without squeezing the task canvas', async () => {
+     const user = userEvent.setup();
+     render(<TaskWorkspace />);
+ 
++    expect(screen.queryByLabelText('任务详情')).not.toBeInTheDocument();
++    expect(screen.getByLabelText('任务画布')).not.toHaveClass('detail-collapsed');
++
+     await user.click(screen.getByText('任务管理库第一篇文档'));
+ 
+     expect(screen.getByLabelText('任务详情')).toBeInTheDocument();
+     expect(screen.getByLabelText('详情标题')).toHaveValue('任务管理库第一篇文档');
++    expect(screen.getByLabelText('任务详情层')).toBeInTheDocument();
++  });
++
++  it('keeps the selected task when the detail drawer is closed and reopened', async () => {
++    const user = userEvent.setup();
++    render(<TaskWorkspace />);
++
++    await user.click(screen.getByText('任务管理库第一篇文档'));
++    await user.click(screen.getByRole('button', { name: '关闭详情面板' }));
++    await user.click(screen.getByRole('button', { name: '显示详情' }));
++
++    expect(screen.getByLabelText('详情标题')).toHaveValue('任务管理库第一篇文档');
+   });
+ 
+   it('shows an empty state when all tasks are completed', async () => {
+     const user = userEvent.setup();
+     render(<TaskWorkspace />);
+ 
+     await user.click(screen.getByRole('button', { name: '完成' }));
+ 
+     expect(screen.getByText('还没有已完成的任务。')).toBeInTheDocument();
+   });
+@@ -251,20 +266,21 @@ describe('TaskWorkspace', () => {
+     await user.click(screen.getByRole('button', { name: '完成' }));
+ 
+     expect(screen.getByText('还没有已完成的任务。')).toBeInTheDocument();
+   });
+ 
+   it('uses the current view context for the detail empty state', async () => {
+     const user = userEvent.setup();
+     render(<TaskWorkspace />);
+ 
+     await user.click(screen.getByRole('button', { name: '完成' }));
++    await user.click(screen.getByRole('button', { name: '显示详情' }));
+ 
+     const detail = screen.getByLabelText('任务详情');
+     expect(within(detail).getByText('还没有已完成的任务可查看。')).toBeInTheDocument();
+     expect(within(detail).queryByText('当前筛选下没有可查看的任务。')).not.toBeInTheDocument();
+   });
+ 
+   it('moves a task to another board column with drag and drop', () => {
+     render(<TaskWorkspace />);
+     const dataTransfer = createDataTransfer();
+     const nextColumn = screen.getByLabelText('下一步栏');
+@@ -326,38 +342,40 @@ describe('TaskWorkspace', () => {
+     expect(screen.queryByText('任务管理库第一篇文档')).not.toBeInTheDocument();
+ 
+     await user.click(screen.getByRole('button', { name: '看板' }));
+     expect(screen.getByLabelText('状态看板')).toBeInTheDocument();
+   });
+ 
+   it('can collapse and restore the task detail panel', async () => {
+     const user = userEvent.setup();
+     render(<TaskWorkspace />);
+ 
++    await user.click(screen.getByText('整理本周重点任务'));
+     expect(screen.getByLabelText('任务详情')).toBeInTheDocument();
+     expect(screen.getByLabelText('详情标题')).toBeInTheDocument();
+ 
+     await user.click(screen.getByRole('button', { name: '隐藏详情' }));
+ 
+     expect(screen.queryByLabelText('任务详情')).not.toBeInTheDocument();
+     expect(screen.queryByLabelText('详情标题')).not.toBeInTheDocument();
+ 
+     await user.click(screen.getByRole('button', { name: '显示详情' }));
+ 
+     expect(screen.getByLabelText('任务详情')).toBeInTheDocument();
+     expect(screen.getByLabelText('详情标题')).toBeInTheDocument();
+   });
+ 
+   it('can collapse the detail panel from the detail header', async () => {
+     const user = userEvent.setup();
+     render(<TaskWorkspace />);
+ 
++    await user.click(screen.getByText('整理本周重点任务'));
+     await user.click(screen.getByRole('button', { name: '关闭详情面板' }));
+ 
+     expect(screen.queryByLabelText('任务详情')).not.toBeInTheDocument();
+     expect(screen.getByRole('button', { name: '显示详情' })).toBeInTheDocument();
+   });
+ 
+   it('includes overdue tasks in the today execution view', async () => {
+     const user = userEvent.setup();
+     render(<TaskWorkspace />);
+     const quickAdd = within(screen.getByLabelText('新建任务'));
+@@ -434,49 +452,52 @@ describe('TaskWorkspace', () => {
+     expect(screen.getByText('当前筛选没有匹配的任务。')).toBeInTheDocument();
+     expect(screen.getByText('已筛选 0 / 1 个任务')).toBeInTheDocument();
+   });
+ 
+   it('updates the detail panel to the first completed task in the completed view', async () => {
+     const user = userEvent.setup();
+     render(<TaskWorkspace />);
+ 
+     await user.click(screen.getByRole('button', { name: '切换完成：等待反馈：下一步是否加入番茄钟' }));
+     await user.click(screen.getByRole('button', { name: '完成' }));
++    await user.click(screen.getByText('等待反馈：下一步是否加入番茄钟'));
+ 
+     expect(screen.getByLabelText('详情标题')).toHaveValue('等待反馈：下一步是否加入番茄钟');
+   });
+ 
+-  it('labels toolbar filters and detail fields for assistive technology', () => {
++  it('labels toolbar filters and detail fields for assistive technology', async () => {
++    const user = userEvent.setup();
+     render(<TaskWorkspace />);
+ 
+     expect(screen.getByLabelText('按状态筛选')).toBeInTheDocument();
+     expect(screen.getByLabelText('按优先级筛选')).toBeInTheDocument();
+     expect(screen.getByLabelText('按日期筛选')).toBeInTheDocument();
++    await user.click(screen.getByText('整理本周重点任务'));
+     expect(screen.getByLabelText('详情标题')).toBeInTheDocument();
+     expect(screen.getByLabelText('详情备注')).toBeInTheDocument();
+   });
+ 
+   it('contains the status filter in the established filter strip', () => {
+     render(<TaskWorkspace />);
+ 
+     expect(screen.getByLabelText('按状态筛选').closest('.filter-strip')).not.toBeNull();
+   });
+ 
+   it('supports keyboard shortcuts for search, quick add, and view switching', async () => {
+     const user = userEvent.setup();
+     render(<TaskWorkspace />);
+ 
+     await user.keyboard('/');
+     expect(screen.getByLabelText('搜索任务')).toHaveFocus();
+ 
+     await user.keyboard('{Escape}n');
+-    expect(screen.getByLabelText('任务标题')).toHaveFocus();
++    await waitFor(() => expect(screen.getByLabelText('任务标题')).toHaveFocus());
+ 
+     await user.keyboard('{Escape}2');
+     expect(screen.getByLabelText('任务列表')).toBeInTheDocument();
+ 
+     await user.keyboard('3');
+     expect(screen.getByLabelText('今日任务')).toBeInTheDocument();
+ 
+     await user.keyboard('1');
+     expect(screen.getByLabelText('状态看板')).toBeInTheDocument();
+   });
+diff --git a/src/features/tasks/TaskWorkspace.tsx b/src/features/tasks/TaskWorkspace.tsx
+index 96a3951..173dfbc 100644
+--- a/src/features/tasks/TaskWorkspace.tsx
++++ b/src/features/tasks/TaskWorkspace.tsx
+@@ -23,21 +23,21 @@ const handledDropType = 'application/x-task-drop-handled';
+ const cardDropType = 'application/x-task-card-drop';
+ 
+ export function TaskWorkspace() {
+   const [tasks, setTasks] = useState<Task[]>(() => normalizeTasks(loadJson<Task[]>(storageKey, seedTasks)));
+   const [draft, setDraft] = useState<TaskDraft>(emptyDraft);
+   const [labelInput, setLabelInput] = useState('');
+   const [filters, setFilters] = useState<TaskFilters>({ status: 'all', priority: 'all', due: 'all' });
+   const [viewMode, setViewMode] = useState<TaskViewMode>('board');
+   const [selectedId, setSelectedId] = useState<string>('');
+   const [hideCompleted, setHideCompleted] = useState(false);
+-  const [showDetail, setShowDetail] = useState(true);
++  const [showDetail, setShowDetail] = useState(false);
+   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
+   const [pendingImport, setPendingImport] = useState<Task[]>([]);
+   const [message, setMessage] = useState('');
+   const [draggedTaskId, setDraggedTaskId] = useState('');
+   const [dragOverStatus, setDragOverStatus] = useState<TaskStatus | ''>('');
+   const [isQuickAddExpanded, setIsQuickAddExpanded] = useState(false);
+   const [isMobileFiltersExpanded, setIsMobileFiltersExpanded] = useState(false);
+   const projects = useMemo(() => [...new Set(tasks.map((task) => task.project).filter(Boolean))], [tasks]);
+   const labelOptions = useMemo(() => [...new Set(tasks.flatMap((task) => task.labels))], [tasks]);
+   const searchInputRef = useRef<HTMLInputElement>(null);
+@@ -388,53 +388,55 @@ export function TaskWorkspace() {
+             />
+           )}
+           onViewModeChange={setViewMode}
+           onFiltersChange={setFilters}
+           onClearFilters={clearFilters}
+           onShowDetailChange={setShowDetail}
+           onHideCompletedChange={setHideCompleted}
+           onMobileFiltersExpandedChange={setIsMobileFiltersExpanded}
+         />
+ 
+-        <div className={`content-grid ${showDetail ? '' : 'detail-collapsed'}`}>
++        <div className="content-grid" aria-label="任务画布">
+           <TaskViews
+             viewMode={viewMode}
+             filteredTasks={filteredTasks}
+             todayTasks={todayTasks}
+             completedTasks={completedTasks}
+             groups={groups}
+             selectedTask={selectedTask}
+             selectedTaskIds={selectedTaskIds}
+             draggedTaskId={draggedTaskId}
+             dragOverStatus={dragOverStatus}
+             hasActiveFilters={hasActiveFilters}
+             onClearFilters={clearFilters}
+-            onSelectTask={setSelectedId}
+             onToggleTaskSelection={toggleTaskSelection}
+             onToggleDone={toggleDone}
+             onOpenDetail={(task) => {
+               setSelectedId(task.id);
+               setShowDetail(true);
+             }}
+             onTaskDragStart={handleTaskDragStart}
+             onTaskDragEnd={handleTaskDragEnd}
+             onTaskDragOver={handleTaskDragOver}
+             onTaskDrop={handleTaskDrop}
+             onColumnDragOver={handleColumnDragOver}
+             onColumnDragLeave={handleColumnDragLeave}
+             onColumnDrop={handleColumnDrop}
+           />
+ 
+-          {showDetail && (
++        </div>
++        {showDetail && (
++          <div className="detail-layer" aria-label="任务详情层">
++            <div className="detail-scrim" aria-hidden="true" onClick={() => setShowDetail(false)} />
+             <TaskDetailPanel
+               task={selectedTask}
+               emptyMessage={getDetailEmptyStateMessage(visibleDetailLabel)}
+               onPatch={patchTask}
+               onRemove={removeTask}
+               onClose={() => setShowDetail(false)}
+             />
+-          )}
+-        </div>
++          </div>
++        )}
+       </section>
+     </main>
+   );
+ }

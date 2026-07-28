@@ -1,0 +1,15 @@
+node_modules/
+dist/
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+.DS_Store
+.env
+.env.*
+
+# Playwright acceptance artifacts and CLI logs
+output/
+.playwright-cli/
+
+# One-off debug scripts
+fix_workspace.py
