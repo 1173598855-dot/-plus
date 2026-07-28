@@ -16,10 +16,14 @@ Status: DONE
 - `npm test -- src/lib/storage.test.ts src/features/tasks/TaskWorkspace.test.tsx -t "storage|stored|recovery|damaged"`
   - Expected: recovery controls and write protection should be absent before implementation.
   - Observed: 5 failures; recovery controls were missing and invalid local data was replaced by seed tasks.
+- `npm test -- src/features/tasks/taskBackup.test.ts -t "impossible timezone offsets"`
+  - Expected: an offset beyond the real ISO range must be rejected.
+  - Observed: 1 failure; `+14:01` was accepted because `Date.parse` permits offsets beyond `+14:00`.
 
 ## GREEN Evidence
 
 - `npm test -- src/features/tasks/taskBackup.test.ts`: 8 passed after the initial decoder cycle; final run: 19 passed.
+- Follow-up decoder review run: 22 passed after rejecting impossible calendar timestamps and timezone offsets while preserving explicit valid offsets.
 - `npm test -- src/lib/storage.test.ts`: 5 passed after the initial storage cycle; final run: 7 passed.
 - `npm test -- src/lib/storage.test.ts src/features/tasks/TaskWorkspace.test.tsx -t "storage|stored|recovery|damaged"`: 13 passed.
 - `npm test -- src/features/tasks/taskBackup.test.ts src/lib/storage.test.ts src/features/tasks/TaskWorkspace.test.tsx`: 88 passed.
@@ -37,9 +41,11 @@ Status: DONE
 ## Self-Review And Concerns
 
 - Decoder output is explicitly reconstructed, so unknown persisted task fields cannot round-trip.
+- Calendar components and real timezone-offset bounds are checked before `Date.parse`, preventing its rollover and overly permissive offset behavior.
 - Valid empty arrays remain valid decoder/import values. The existing Task 4 nullable empty-import preview behavior is intentionally not introduced here.
 - A Vitest parallel rerun briefly resolved the repository through an isolated cwd and could not locate source files. Sequential and `npm --prefix` reruns completed successfully; this is a test-runner environment artifact, not a product failure.
 
 ## Commit
 
 - `a908293` (implementation commit).
+- `04bed9a` (timestamp validation review fix).
