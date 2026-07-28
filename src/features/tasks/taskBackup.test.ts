@@ -41,6 +41,22 @@ describe('taskBackup', () => {
     expect(decodeTaskArray([{ ...task, title: '   ' }])).toBeUndefined();
   });
 
+  it('rejects impossible calendar dates in ISO timestamps', () => {
+    expect(decodeTaskArray([{ ...task, createdAt: '2026-02-30T00:00:00.000Z' }])).toBeUndefined();
+  });
+
+  it('accepts ISO timestamps with explicit timezone offsets', () => {
+    const offsetTimestamp = '2026-07-01T16:00:00.000+08:00';
+
+    expect(decodeTaskArray([{ ...task, createdAt: offsetTimestamp, updatedAt: offsetTimestamp }])).toEqual([
+      { ...task, createdAt: offsetTimestamp, updatedAt: offsetTimestamp },
+    ]);
+  });
+
+  it('rejects timestamps with impossible timezone offsets', () => {
+    expect(decodeTaskArray([{ ...task, createdAt: '2026-07-01T00:00:00+14:01' }])).toBeUndefined();
+  });
+
   it.each(unsafeTaskArrays)('rejects unsafe task data %#', (tasks) => {
     expect(decodeTaskArray(tasks)).toBeUndefined();
   });

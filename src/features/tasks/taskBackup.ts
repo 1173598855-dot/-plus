@@ -31,7 +31,16 @@ function isRealDate(value: string): boolean {
 }
 
 function isIsoTimestamp(value: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}T/.test(value) && !Number.isNaN(Date.parse(value));
+  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/.exec(value);
+  if (!match) return false;
+
+  const [, date, hours, minutes, seconds, timezone] = match;
+  if (!isRealDate(date) || Number(hours) > 23 || Number(minutes) > 59 || (seconds !== undefined && Number(seconds) > 59)) return false;
+  if (timezone !== 'Z') {
+    const [offsetHours, offsetMinutes] = timezone.slice(1).split(':').map(Number);
+    if (offsetHours > 14 || offsetMinutes > 59 || (offsetHours === 14 && offsetMinutes !== 0)) return false;
+  }
+  return !Number.isNaN(Date.parse(value));
 }
 
 const taskKeys = new Set([
