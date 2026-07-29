@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { vi } from 'vitest';
 import { TaskWorkspace } from './TaskWorkspace';
+import { taskSchemaLimits } from './taskSchema';
 
 const storedTask = {
   id: 'stored-task',
@@ -54,6 +55,7 @@ describe('TaskWorkspace', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    Object.defineProperty(taskSchemaLimits, 'maxTasks', { configurable: true, value: 10_000, writable: true });
   });
 
   it('filters tasks by project and label, then clears filters', async () => {
@@ -158,6 +160,20 @@ describe('TaskWorkspace', () => {
     expect(screen.queryByRole('button', { name: '下载损坏的原始数据' })).not.toBeInTheDocument();
   });
 
+  it('keeps a known invalid raw value when a recovery retry becomes unavailable', async () => {
+    const user = userEvent.setup();
+    localStorage.setItem('personal-task-manager.tasks.v1', '{broken');
+    render(<TaskWorkspace />);
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+
+    const retry = screen.getAllByRole('button').find((button) => button.textContent?.includes('重试'));
+    await user.click(retry as HTMLButtonElement);
+
+    expect(screen.getAllByRole('button').some((button) => button.textContent?.includes('下载'))).toBe(true);
+  });
+
   it('resumes persistence after a confirmed recovery import replacement', async () => {
     const user = userEvent.setup();
     localStorage.setItem('personal-task-manager.tasks.v1', '{broken');
@@ -187,6 +203,23 @@ describe('TaskWorkspace', () => {
       if (descriptor) Object.defineProperty(window, 'localStorage', descriptor);
       else delete (window as unknown as Record<string, unknown>).localStorage;
     }
+  });
+
+  it('keeps automatic persistence blocked after startup storage is unavailable', async () => {
+    const user = userEvent.setup();
+    const originalGetItem = Storage.prototype.getItem;
+    localStorage.setItem('personal-task-manager.tasks.v1', 'protected snapshot');
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(function (this: Storage, key: string) {
+      if (key === 'personal-task-manager.tasks.v1') throw new Error('blocked');
+      return originalGetItem.call(this, key);
+    });
+
+    render(<TaskWorkspace />);
+    await user.type(document.querySelector('input') as HTMLInputElement, 'blocked edit');
+    await user.click(document.querySelector('button.primary') as HTMLButtonElement);
+
+    expect(originalGetItem.call(localStorage, 'personal-task-manager.tasks.v1')).toBe('protected snapshot');
+    expect(screen.getAllByRole('button').some((button) => button.textContent?.includes('retry'))).toBe(false);
   });
 
   it('creates a task and persists it to localStorage', async () => {
@@ -1111,6 +1144,35 @@ describe('TaskWorkspace', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('导入文件不能超过 5 MiB。');
     expect(readFile).not.toHaveBeenCalled();
   });
+
+  it('rejects an over-limit merge without changing tasks, clearing the pending import, or unblocking recovery', async () => {
+    const user = userEvent.setup();
+    Object.defineProperty(taskSchemaLimits, 'maxTasks', { configurable: true, value: 1, writable: true });
+    const storedTasks = Array.from({ length: 1 }, (_, index) => ({
+      ...storedTask,
+      id: `stored-${index}`,
+      title: `stored task ${index}`,
+    }));
+    localStorage.setItem('personal-task-manager.tasks.v1', JSON.stringify(storedTasks));
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('write blocked');
+    });
+    render(<TaskWorkspace />);
+    const file = new File([JSON.stringify([{ ...storedTask, id: 'overflow-import', title: 'overflow import' }])], 'overflow.json', { type: 'application/json' });
+
+    await user.upload(document.querySelector('input[type="file"]') as HTMLInputElement, file);
+    const merge = await waitFor(() => {
+      const button = screen.getAllByRole('button').find((item) => item.textContent?.includes('合并'));
+      expect(button).toBeDefined();
+      return button as HTMLButtonElement;
+    });
+    await user.click(merge);
+
+    expect(screen.getByText('stored task 0')).toBeInTheDocument();
+    expect(screen.queryByText('overflow import')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button').some((button) => button.textContent?.includes('合并'))).toBe(true);
+    expect(screen.getAllByRole('button').some((button) => button.textContent?.includes('重试'))).toBe(true);
+  }, 60_000);
 
   it('can merge imported tasks without duplicating existing ids', async () => {
     const user = userEvent.setup();

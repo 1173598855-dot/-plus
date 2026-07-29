@@ -14,6 +14,7 @@ export interface TaskQuickAddProps {
   message: string;
   hasPendingImport: boolean;
   recoveryRaw: string | null;
+  recoveryBlocked: boolean;
   onDraftChange: (draft: TaskDraft) => void;
   onLabelInputChange: (value: string) => void;
   onExpandedChange: (isExpanded: boolean) => void;
@@ -38,6 +39,7 @@ export function TaskQuickAdd({
   message,
   hasPendingImport,
   recoveryRaw,
+  recoveryBlocked,
   onDraftChange,
   onLabelInputChange,
   onExpandedChange,
@@ -167,11 +169,11 @@ export function TaskQuickAdd({
             </button>
           </div>
         )}
-        {recoveryRaw !== null && (
+        {recoveryBlocked && (
           <div className="import-actions" aria-label={quickAddLabels.recoveryTitle}>
-            <button className="secondary-action" type="button" onClick={onDownloadRecovery}>
+            {recoveryRaw !== null && <button className="secondary-action" type="button" onClick={onDownloadRecovery}>
               <Download size={16} /> {quickAddLabels.downloadDamagedData}
-            </button>
+            </button>}
             <button className="secondary-action" type="button" onClick={onRetryStorage}>
               {quickAddLabels.retryStorage}
             </button>

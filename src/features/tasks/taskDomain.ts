@@ -1,4 +1,5 @@
 import type { Task, TaskClock, TaskDraft, TaskEnergy, TaskFilters, TaskGroups, TaskPatch, TaskStatus } from './taskTypes';
+import { isCalendarDate, isIsoTimestamp, taskSchemaLimits } from './taskSchema';
 
 const statuses: TaskStatus[] = ['inbox', 'next', 'scheduled', 'waiting', 'done'];
 const energies: TaskEnergy[] = ['low', 'medium', 'high'];
@@ -9,15 +10,20 @@ function normalizeText(value: string | undefined): string {
   return value?.trim() ?? '';
 }
 
+function normalizeBoundedText(value: string | undefined, maxLength: number): string {
+  return normalizeText(value).slice(0, maxLength);
+}
+
 function normalizeLabels(labels: string[] | undefined): string[] {
   const seen = new Set<string>();
   const normalized: string[] = [];
 
   for (const label of labels ?? []) {
-    const trimmed = label.trim();
+    const trimmed = label.trim().slice(0, taskSchemaLimits.maxLabelLength);
     if (trimmed && !seen.has(trimmed)) {
       normalized.push(trimmed);
       seen.add(trimmed);
+      if (normalized.length === taskSchemaLimits.maxLabels) break;
     }
   }
 
@@ -38,11 +44,22 @@ function normalizeEnergy(value: TaskEnergy | undefined): TaskEnergy {
 }
 
 function requireTitle(title: string | undefined): string {
-  const normalized = normalizeText(title);
+  const normalized = normalizeBoundedText(title, taskSchemaLimits.maxTitleLength);
   if (!normalized) {
     throw new Error('Task title is required');
   }
   return normalized;
+}
+
+function requireId(id: string): string {
+  const normalized = normalizeBoundedText(id, taskSchemaLimits.maxIdLength);
+  if (!normalized) throw new Error('Task id is required');
+  return normalized;
+}
+
+function requireTimestamp(value: string): string {
+  if (!isIsoTimestamp(value)) throw new Error('Task timestamp is invalid');
+  return value;
 }
 
 function matchesDueBucket(task: Task, due: TaskFilters['due'], today: string): boolean {
@@ -67,16 +84,16 @@ export function createTask(draft: TaskDraft, clock: TaskClock): Task {
   const completedAt = status === 'done' ? clock.now : '';
 
   return {
-    id: clock.id,
+    id: requireId(clock.id),
     title: requireTitle(draft.title),
-    notes: normalizeText(draft.notes),
+    notes: normalizeBoundedText(draft.notes, taskSchemaLimits.maxNotesLength),
     status,
     priority: draft.priority ?? 'medium',
-    dueDate: normalizeText(draft.dueDate),
-    project: normalizeText(draft.project),
+    dueDate: isCalendarDate(normalizeText(draft.dueDate)) ? normalizeText(draft.dueDate) : '',
+    project: normalizeBoundedText(draft.project, taskSchemaLimits.maxProjectLength),
     labels: normalizeLabels(draft.labels),
-    createdAt: clock.now,
-    updatedAt: clock.now,
+    createdAt: requireTimestamp(clock.now),
+    updatedAt: requireTimestamp(clock.now),
     completedAt,
     sortOrder: normalizeSortOrder(draft.sortOrder, Date.parse(clock.now) || 0),
     estimateMinutes: normalizeEstimateMinutes(draft.estimateMinutes),
@@ -86,7 +103,8 @@ export function createTask(draft: TaskDraft, clock: TaskClock): Task {
 
 export function nextTaskSortOrder(tasks: Task[], status: TaskStatus): number {
   const highestOrder = tasks.reduce((highest, task) => (task.status === status ? Math.max(highest, task.sortOrder) : highest), 0);
-  return highestOrder + sortOrderStep;
+  const nextOrder = highestOrder + sortOrderStep;
+  return Number.isFinite(nextOrder) && nextOrder > highestOrder ? nextOrder : sortOrderStep;
 }
 
 export function updateTask(task: Task, patch: TaskPatch, now: string): Task {
@@ -97,11 +115,11 @@ export function updateTask(task: Task, patch: TaskPatch, now: string): Task {
   return {
     ...task,
     title: patch.title === undefined ? task.title : requireTitle(patch.title),
-    notes: patch.notes === undefined ? task.notes : normalizeText(patch.notes),
+    notes: patch.notes === undefined ? task.notes : normalizeBoundedText(patch.notes, taskSchemaLimits.maxNotesLength),
     status: nextStatus,
     priority: patch.priority ?? task.priority,
-    dueDate: patch.dueDate === undefined ? task.dueDate : normalizeText(patch.dueDate),
-    project: patch.project === undefined ? task.project : normalizeText(patch.project),
+    dueDate: patch.dueDate === undefined ? task.dueDate : (isCalendarDate(normalizeText(patch.dueDate)) ? normalizeText(patch.dueDate) : ''),
+    project: patch.project === undefined ? task.project : normalizeBoundedText(patch.project, taskSchemaLimits.maxProjectLength),
     labels: patch.labels === undefined ? task.labels : normalizeLabels(patch.labels),
     updatedAt: now,
     completedAt: becameDone ? now : reopened ? '' : task.completedAt,

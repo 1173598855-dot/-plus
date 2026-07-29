@@ -5,6 +5,7 @@ import { createId } from '../../lib/id';
 import { readJson, saveJson } from '../../lib/storage';
 import { createTask, deleteTask, filterTasks, groupTasksByStatus, moveTask, nextTaskSortOrder, normalizeTasks, sortTasks, summarizeTasks, updateTask } from './taskDomain';
 import { decodeTaskArray, exportTasksToJson, importTasksFromJson } from './taskBackup';
+import { taskSchemaLimits } from './taskSchema';
 import { seedTasks } from './seedTasks';
 import { TaskBulkActions } from './TaskBulkActions';
 import { detailHeadingId, TaskDetailPanel } from './TaskDetailPanel';
@@ -21,16 +22,19 @@ const maxImportBytes = 5 * 1024 * 1024;
 interface TaskStorageState {
   tasks: Task[];
   recoveryRaw: string | null;
+  recoveryBlocked: boolean;
+  hasStoredTasks: boolean;
 }
 
 function readStoredTasks(): TaskStorageState {
   const result = readJson<unknown>(storageKey);
   if (result.status === 'success') {
     const tasks = decodeTaskArray(result.value);
-    return tasks === undefined ? { tasks: normalizeTasks(seedTasks), recoveryRaw: result.raw } : { tasks, recoveryRaw: null };
+    return tasks === undefined ? { tasks: normalizeTasks(seedTasks), recoveryRaw: result.raw, recoveryBlocked: true, hasStoredTasks: false } : { tasks, recoveryRaw: null, recoveryBlocked: false, hasStoredTasks: true };
   }
-  if (result.status === 'invalid') return { tasks: normalizeTasks(seedTasks), recoveryRaw: result.raw };
-  return { tasks: normalizeTasks(seedTasks), recoveryRaw: null };
+  if (result.status === 'invalid') return { tasks: normalizeTasks(seedTasks), recoveryRaw: result.raw, recoveryBlocked: true, hasStoredTasks: false };
+  if (result.status === 'unavailable') return { tasks: normalizeTasks(seedTasks), recoveryRaw: null, recoveryBlocked: true, hasStoredTasks: false };
+  return { tasks: normalizeTasks(seedTasks), recoveryRaw: null, recoveryBlocked: false, hasStoredTasks: false };
 }
 
 const emptyDraft: TaskDraft = { title: '', notes: '', status: 'inbox', priority: 'medium', dueDate: '', project: '', labels: [], estimateMinutes: 0, energy: 'medium' };
@@ -43,6 +47,7 @@ export function TaskWorkspace() {
   const [startup] = useState(readStoredTasks);
   const [tasks, setTasks] = useState<Task[]>(startup.tasks);
   const [recoveryRaw, setRecoveryRaw] = useState<string | null>(startup.recoveryRaw);
+  const [recoveryBlocked, setRecoveryBlocked] = useState(startup.recoveryBlocked);
   const [draft, setDraft] = useState<TaskDraft>(emptyDraft);
   const [labelInput, setLabelInput] = useState('');
   const [filters, setFilters] = useState<TaskFilters>({ status: 'all', priority: 'all', due: 'all' });
@@ -102,13 +107,14 @@ export function TaskWorkspace() {
   }, []);
 
   useEffect(() => {
-    if (recoveryRaw !== null) return;
+    if (recoveryBlocked) return;
     try {
       saveJson(storageKey, tasks);
     } catch {
+      setRecoveryBlocked(true);
       setMessage(operationMessages.storageUnavailable);
     }
-  }, [recoveryRaw, tasks]);
+  }, [recoveryBlocked, tasks]);
 
   useEffect(() => {
     function isTypingTarget(target: EventTarget | null) {
@@ -276,7 +282,7 @@ export function TaskWorkspace() {
     const task = createTask({ ...draft, labels: labelsFromInput(labelInput) }, { id: createId(), now: nowIso() });
     setTasks((current) => [task, ...current]);
     setSelectedId(task.id);
-    setMessage(operationMessages.taskCreated(task.title));
+    setMessage(recoveryBlocked ? operationMessages.storageUnavailable : operationMessages.taskCreated(task.title));
     resetDraft();
   }
 
@@ -284,10 +290,16 @@ export function TaskWorkspace() {
     const normalizedTitle = title.trim();
     if (!normalizedTitle) return;
     const clock = { id: createId(), now: nowIso() };
-    setTasks((current) => [
-      ...current,
-      createTask({ title: normalizedTitle, status, sortOrder: nextTaskSortOrder(current, status) }, clock),
-    ]);
+    setTasks((current) => {
+      const columnTasks = current.filter((task) => task.status === status).sort((left, right) => left.sortOrder - right.sortOrder);
+      const sortOrder = nextTaskSortOrder(current, status);
+      if (columnTasks.length && sortOrder <= columnTasks.at(-1)!.sortOrder) {
+        const normalizedOrders = new Map(columnTasks.map((task, index) => [task.id, (index + 1) * 1000]));
+        const normalizedTasks = current.map((task) => normalizedOrders.has(task.id) ? { ...task, sortOrder: normalizedOrders.get(task.id)! } : task);
+        return [...normalizedTasks, createTask({ title: normalizedTitle, status, sortOrder: (columnTasks.length + 1) * 1000 }, clock)];
+      }
+      return [...current, createTask({ title: normalizedTitle, status, sortOrder }, clock)];
+    });
     setSelectedId(clock.id);
     setMessage(columnQuickAddLabels.created(statusLabels[status], normalizedTitle));
   }
@@ -368,12 +380,20 @@ export function TaskWorkspace() {
 
   function retryStorage() {
     const next = readStoredTasks();
-    setTasks(next.tasks);
-    setRecoveryRaw(next.recoveryRaw);
+    if (!next.recoveryBlocked) {
+      if (next.hasStoredTasks) setTasks(next.tasks);
+      setRecoveryRaw(null);
+      setRecoveryBlocked(false);
+      return;
+    }
+    setRecoveryRaw((current) => current ?? next.recoveryRaw);
+    setRecoveryBlocked(true);
+    setMessage(operationMessages.storageUnavailable);
   }
 
   function resetStorage() {
     setRecoveryRaw(null);
+    setRecoveryBlocked(false);
   }
 
   async function importTasks(file: File | undefined) {
@@ -402,6 +422,7 @@ export function TaskWorkspace() {
     if (pendingImport === null) return;
     setTasks(pendingImport);
     setRecoveryRaw(null);
+    setRecoveryBlocked(false);
     setSelectedTaskIds([]);
     setSelectedId(pendingImport[0]?.id ?? '');
     setMessage(operationMessages.importReplaced(pendingImport.length));
@@ -412,9 +433,14 @@ export function TaskWorkspace() {
     if (pendingImport === null) return;
     const existingIds = new Set(tasks.map((task) => task.id));
     const tasksToAdd = pendingImport.filter((task) => !existingIds.has(task.id));
+    if (tasks.length + tasksToAdd.length > taskSchemaLimits.maxTasks) {
+      setMessage(operationMessages.importMergeTooLarge);
+      return;
+    }
     setTasks((current) => [...tasksToAdd, ...current]);
     setSelectedId(tasksToAdd[0]?.id ?? selectedId);
     setRecoveryRaw(null);
+    setRecoveryBlocked(false);
     setMessage(operationMessages.importMerged(tasksToAdd.length, pendingImport.length - tasksToAdd.length));
     setPendingImport(null);
   }
@@ -514,6 +540,7 @@ export function TaskWorkspace() {
         message={message}
         hasPendingImport={pendingImport !== null}
         recoveryRaw={recoveryRaw}
+        recoveryBlocked={recoveryBlocked}
         onDraftChange={setDraft}
         onLabelInputChange={setLabelInput}
         onExpandedChange={setIsQuickAddExpanded}

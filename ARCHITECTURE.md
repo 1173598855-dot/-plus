@@ -21,7 +21,7 @@
 - `filterTasks` / `sortTasks` / `moveTask` / `nextTaskSortOrder` / `summarizeTasks` / `groupTasksByStatus`：筛选、排序、拖拽重排、列尾追加顺序、统计和按状态分组。
 - `normalizeTasks`：为旧数据补齐 `sortOrder`、`estimateMinutes`、`energy` 等后加字段的默认值，保证向后兼容。
 
-关键约定：**领域函数不接触 `Date`、`localStorage` 或 React**。时间和随机性都由调用方注入（见 `TaskClock`）。新增领域逻辑时请沿用这一约定，它是这些函数可测试的前提。
+关键约定：**领域函数不读取当前时间或其他外部状态，也不接触 `localStorage` 或 React**。时间和随机性都由调用方注入（见 `TaskClock`）；`createTask` 会解析注入的时间戳以生成后备排序值。新增领域逻辑时请沿用这一约定，它是这些函数可测试的前提。
 
 ## 数据流
 

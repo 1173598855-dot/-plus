@@ -1,5 +1,6 @@
 import type { Task, TaskEnergy, TaskPriority, TaskStatus } from './taskTypes';
 import { normalizeTasks } from './taskDomain';
+import { isCalendarDate, isIsoTimestamp, taskSchemaLimits } from './taskSchema';
 
 interface TaskBackup {
   version: 1;
@@ -10,6 +11,12 @@ interface TaskBackup {
 const statuses: TaskStatus[] = ['inbox', 'next', 'scheduled', 'waiting', 'done'];
 const priorities: TaskPriority[] = ['low', 'medium', 'high', 'urgent'];
 const energies: TaskEnergy[] = ['low', 'medium', 'high'];
+
+export const taskBackupErrors = {
+  invalidJson: 'Import file is not valid JSON.',
+  unsupportedVersion: 'Unsupported task backup version.',
+  invalidTasks: 'Import file does not contain valid task data.',
+} as const;
 
 function isString(value: unknown): value is string {
   return typeof value === 'string';
@@ -23,25 +30,6 @@ function isNumberOrMissing(value: unknown): boolean {
   return value === undefined || (typeof value === 'number' && Number.isFinite(value));
 }
 
-function isRealDate(value: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const [year, month, day] = value.split('-').map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day));
-  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
-}
-
-function isIsoTimestamp(value: string): boolean {
-  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/.exec(value);
-  if (!match) return false;
-
-  const [, date, hours, minutes, seconds, timezone] = match;
-  if (!isRealDate(date) || Number(hours) > 23 || Number(minutes) > 59 || (seconds !== undefined && Number(seconds) > 59)) return false;
-  if (timezone !== 'Z') {
-    const [offsetHours, offsetMinutes] = timezone.slice(1).split(':').map(Number);
-    if (offsetHours > 14 || offsetMinutes > 59 || (offsetHours === 14 && offsetMinutes !== 0)) return false;
-  }
-  return !Number.isNaN(Date.parse(value));
-}
 
 const taskKeys = new Set([
   'id', 'title', 'notes', 'status', 'priority', 'dueDate', 'project', 'labels', 'createdAt', 'updatedAt', 'completedAt', 'sortOrder', 'estimateMinutes', 'energy',
@@ -52,12 +40,12 @@ function decodeTask(value: unknown): Task | undefined {
   const task = value as Partial<Task>;
   if (Object.keys(task).some((key) => !taskKeys.has(key))) return undefined;
   if (
-    !isString(task.id) || !task.id.trim() || task.id.length > 200 ||
-    !isString(task.title) || !task.title.trim() || task.title.length > 500 ||
-    !isString(task.notes) || task.notes.length > 20000 ||
-    !isString(task.project) || task.project.length > 200 ||
-    !isStringArray(task.labels) || task.labels.length > 50 || task.labels.some((label) => label.length > 100) ||
-    !isString(task.dueDate) || (task.dueDate !== '' && !isRealDate(task.dueDate)) ||
+    !isString(task.id) || !task.id.trim() || task.id.length > taskSchemaLimits.maxIdLength ||
+    !isString(task.title) || !task.title.trim() || task.title.length > taskSchemaLimits.maxTitleLength ||
+    !isString(task.notes) || task.notes.length > taskSchemaLimits.maxNotesLength ||
+    !isString(task.project) || task.project.length > taskSchemaLimits.maxProjectLength ||
+    !isStringArray(task.labels) || task.labels.length > taskSchemaLimits.maxLabels || task.labels.some((label) => label.length > taskSchemaLimits.maxLabelLength) ||
+    !isString(task.dueDate) || (task.dueDate !== '' && !isCalendarDate(task.dueDate)) ||
     !isString(task.createdAt) || !isIsoTimestamp(task.createdAt) ||
     !isString(task.updatedAt) || !isIsoTimestamp(task.updatedAt) ||
     !isString(task.completedAt) ||
@@ -86,7 +74,7 @@ function decodeTask(value: unknown): Task | undefined {
 }
 
 export function decodeTaskArray(value: unknown): Task[] | undefined {
-  if (!Array.isArray(value) || value.length > 10000) return undefined;
+  if (!Array.isArray(value) || value.length > taskSchemaLimits.maxTasks) return undefined;
   const ids = new Set<string>();
   const tasks: Task[] = [];
   for (const item of value) {

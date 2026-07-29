@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decodeTaskArray, exportTasksToJson, importTasksFromJson } from './taskBackup';
+import { decodeTaskArray, exportTasksToJson, importTasksFromJson, taskBackupErrors } from './taskBackup';
 import type { Task } from './taskTypes';
 
 const task: Task = {
@@ -33,6 +33,12 @@ const unsafeTaskArrays: unknown[] = [
 ];
 
 describe('taskBackup', () => {
+  it('exports stable decoder error constants', () => {
+    expect(taskBackupErrors.invalidJson).toBeTruthy();
+    expect(taskBackupErrors.unsupportedVersion).toBeTruthy();
+    expect(taskBackupErrors.invalidTasks).toBeTruthy();
+  });
+
   it('decodes a valid empty task array', () => {
     expect(decodeTaskArray([])).toEqual([]);
   });

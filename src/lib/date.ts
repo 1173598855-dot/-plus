@@ -5,13 +5,13 @@ export function todayIso(date = new Date()): string {
   return `${year}-${month}-${day}`;
 }
 
-export function nowIso(): string {
-  return new Date().toISOString();
+export function nowIso(date = new Date()): string {
+  return date.toISOString();
 }
 
-export function formatDate(value: string): string {
-  if (!value) return '无日期';
+export function formatDate(value: string, fallback = ''): string {
+  if (!value) return fallback;
   const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return '无日期';
+  if (Number.isNaN(date.getTime())) return fallback;
   return new Intl.DateTimeFormat('zh-CN', { month: 'short', day: 'numeric' }).format(date);
 }

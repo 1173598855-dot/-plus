@@ -10,6 +10,7 @@ import {
   summarizeTasks,
   updateTask,
 } from './taskDomain';
+import { decodeTaskArray } from './taskBackup';
 import type { Task } from './taskTypes';
 
 const baseTask: Task = {
@@ -173,5 +174,32 @@ describe('taskDomain', () => {
 
     expect(nextTaskSortOrder(tasks, 'next')).toBe(9000001000);
     expect(nextTaskSortOrder(tasks, 'inbox')).toBe(1000);
+  });
+
+  it('keeps programmatically created and updated tasks within the backup schema limits', () => {
+    const created = createTask({
+      title: `  ${'t'.repeat(600)}  `,
+      notes: 'n'.repeat(20001),
+      project: 'p'.repeat(201),
+      labels: Array.from({ length: 55 }, (_, index) => ` ${index}-${'l'.repeat(100)} `),
+    }, { id: 'i'.repeat(201), now: '2026-07-03T08:00:00.000Z' });
+    const updated = updateTask(created, {
+      title: 'u'.repeat(600),
+      notes: 'n'.repeat(20001),
+      project: 'p'.repeat(201),
+      labels: Array.from({ length: 55 }, (_, index) => `${index}-${'l'.repeat(100)}`),
+    }, '2026-07-03T09:00:00.000Z');
+
+    expect(decodeTaskArray([created])).toEqual([created]);
+    expect(decodeTaskArray([updated])).toEqual([updated]);
+  });
+
+  it('returns a finite, strictly later append order when a column contains Number.MAX_VALUE', () => {
+    const tasks = [{ ...baseTask, id: 'extreme', sortOrder: Number.MAX_VALUE }];
+    const nextOrder = nextTaskSortOrder(tasks, 'next');
+
+    expect(nextOrder).toBeGreaterThan(0);
+    expect(Number.isFinite(nextOrder)).toBe(true);
+    expect(nextOrder).not.toBe(Number.MAX_VALUE);
   });
 });

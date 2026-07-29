@@ -181,6 +181,7 @@ export const workspaceLabels = {
 } as const;
 
 export const operationMessages = {
+  importMergeTooLarge: '合并后任务数量不能超过 10,000。',
   storageUnavailable: '存储不可用，当前修改可能不会持久化。',
   taskCreated: (title: string) => `已创建任务“${title}”。系统已持久化。`,
   tasksCompleted: (count: number) => `已完成 ${count} 个任务。`,

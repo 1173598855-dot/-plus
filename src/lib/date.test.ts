@@ -11,7 +11,8 @@ describe('date', () => {
     expect(todayIso(date)).toBe('2026-01-02');
   });
 
-  it('returns the empty-date label for invalid input', () => {
-    expect(formatDate('not-a-date')).toBe('无日期');
+  it('returns a caller supplied fallback for empty and invalid input', () => {
+    expect(formatDate('', 'No date')).toBe('No date');
+    expect(formatDate('not-a-date', 'No date')).toBe('No date');
   });
 });

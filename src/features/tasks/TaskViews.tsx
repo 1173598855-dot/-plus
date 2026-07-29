@@ -4,7 +4,7 @@ import { formatDate } from '../../lib/date';
 import { taskStatuses } from './taskDomain';
 import { TaskEmptyState, type EmptyStateVariant } from './TaskEmptyState';
 import type { TaskViewMode } from './TaskToolbar';
-import { columnQuickAddLabels, emptyMessages, energyLabels, formatEstimate, priorityLabels, statusLabels, viewLabels } from './taskUiText';
+import { columnQuickAddLabels, dueFilterLabels, emptyMessages, energyLabels, formatEstimate, priorityLabels, statusLabels, viewLabels } from './taskUiText';
 import type { Task, TaskGroups, TaskStatus } from './taskTypes';
 
 export interface TaskViewsProps {
@@ -102,7 +102,7 @@ export function TaskViews({
           <p>{task.notes || task.project || viewLabels.noNotesOrProject}</p>
           <div className="task-meta">
             <span className={`priority ${task.priority}`}>{priorityLabels[task.priority]}</span>
-            <span>{formatDate(task.dueDate)}</span>
+            <span>{formatDate(task.dueDate, dueFilterLabels.none)}</span>
             <span>{formatEstimate(task.estimateMinutes)}</span>
             <span>{energyLabels[task.energy]}</span>
             {task.project && <span>{task.project}</span>}
@@ -175,7 +175,7 @@ export function TaskViews({
                 </div>
                 <span>{statusLabels[task.status]}</span>
                 <span className={`priority ${task.priority}`}>{priorityLabels[task.priority]}</span>
-                <span>{formatDate(task.dueDate)}</span>
+                <span>{formatDate(task.dueDate, dueFilterLabels.none)}</span>
                 <span>{formatEstimate(task.estimateMinutes)}</span>
                 <button
                   className="icon-button"
