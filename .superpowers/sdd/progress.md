@@ -31,3 +31,13 @@ Task 1: complete (commit 9828894, spec PASS, task quality APPROVED; focused beha
 Task 2: complete (commit 96617b7). Verified 2026-07-28 in Linux sandbox: taskDomain/taskBackup/storage 20/20 pass, App.css.test.ts 14/14 pass, tsc --noEmit clean, `vite build` succeeds (1789 modules). TaskWorkspace.test.tsx (jsdom) could not be executed here — node_modules is on a slow 9p mount and jsdom cold load exceeds the shell's 44s cap; not a code issue. Uncommitted working-tree diff is pure CRLF/LF line-ending noise (`git diff --ignore-space-at-eol` is empty), no real changes pending.
 
 Note: a stale empty `.git/index.lock` remains (sandbox cannot delete on the 9p mount) — remove it from Windows before the next commit.
+
+## Guidance Audit Hardening
+
+Plan: `docs/superpowers/plans/2026-07-28-guidance-audit-hardening.md`
+
+Task 1: complete (commits a908293..02e3cad; strict decoder, recoverable storage; taskBackup 22/22, storage 7/7, focused workspace recovery 8/8; typecheck and diff check pass).
+Task 2: complete (commit bf84c7d; natural detail editing and centralized UI copy; TaskWorkspace 64/64; typecheck and diff check pass).
+Task 3: complete (commit b2afb06; local calendar date and midnight/focus/visibility refresh; related tests 67/67; typecheck and diff check pass).
+Task 4: complete (commit dd4707e; empty/race-safe imports, 5 MiB limit, full-state drops, explicit append ordering, linear reconstruction; taskDomain 11/11, TaskWorkspace 72/72; typecheck and diff check pass).
+Task 5: complete (documentation updated; all tests 128/128, build and diff check pass; Playwright acceptance passed at 1440x900, 1024x768, and 390x844 with no page overflow, broken assets, console errors, or focus regressions).

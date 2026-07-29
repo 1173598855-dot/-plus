@@ -26,7 +26,7 @@ Use the existing system sans stack. Product labels, form controls, task titles, 
 
 ## Layout
 
-The primary shell has a left capture/summary rail and a main workspace with toolbar, content view, and detail panel. Desktop should prioritize scanning and comparison. Tablet collapses to one column. Mobile keeps controls reachable and turns dense rows into simplified cards.
+The primary shell has a left capture/summary rail and a main workspace with toolbar and content view. Task details open in a separate overlay layer so the board and list keep their working width. Desktop should prioritize scanning and comparison. Tablet collapses the shell to one column. Mobile keeps controls reachable and turns dense rows into simplified cards.
 
 ## Components
 
@@ -46,4 +46,4 @@ Motion is minimal and state-driven: hover, active press, focus, selected state. 
 - No text overflow inside buttons or cards.
 - Touch-oriented controls should be at least 40px high, with 44px where practical.
 - Avoid horizontal scroll on mobile.
-- Keep detail editing below the main view on tablet/mobile.
+- Keep detail editing in an overlay instead of placing it below or compressing the main view. Above `720px`, use a right-side drawer with a dismissible scrim; at `720px` and below, use a full-viewport detail surface with no exposed background controls.
