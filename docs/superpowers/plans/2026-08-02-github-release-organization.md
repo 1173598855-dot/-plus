@@ -30,7 +30,7 @@
 - Consumes: 根目录 .superpowers/ 现有开发归档和 Git 索引。
 - Produces: .superpowers/ 的本地忽略规则；公开提交中不再包含该目录。
 
-- [ ] **Step 1: 记录当前归档追踪状态的失败基线**
+- [x] **Step 1: 记录当前归档追踪状态的失败基线**
 
 运行：
 
@@ -44,7 +44,7 @@ if ($LASTEXITCODE -eq 0) { throw '.superpowers is unexpectedly ignored before cl
 
 Expected: 追踪列表非空，且 git check-ignore 没有匹配并返回非零，证明归档当前会公开进入仓库。
 
-- [ ] **Step 2: 从索引移除归档但保留本机文件**
+- [x] **Step 2: 从索引移除归档但保留本机文件**
 
 运行：
 
@@ -54,7 +54,7 @@ git rm -r --cached -- .superpowers
 
 该命令只能移除 Git 索引条目，不能使用不带 --cached 的 git rm，以避免删除本机归档。
 
-- [ ] **Step 3: 添加忽略规则并移除失效的归档空白豁免**
+- [x] **Step 3: 添加忽略规则并移除失效的归档空白豁免**
 
 将以下规则加入 .gitignore 的本地开发工具区域：
 
@@ -70,7 +70,7 @@ git rm -r --cached -- .superpowers
 .superpowers/sdd/*.diff -whitespace
 ~~~
 
-- [ ] **Step 4: 验证归档仍在本机且不再被 Git 追踪**
+- [x] **Step 4: 验证归档仍在本机且不再被 Git 追踪**
 
 运行：
 
@@ -85,7 +85,7 @@ git diff --check
 
 Expected: PowerShell exits 0, the local archive exists, tracked output is empty, and .gitignore reports the matching ignore rule.
 
-- [ ] **Step 5: Commit the archive boundary**
+- [x] **Step 5: Commit the archive boundary**
 
 ~~~powershell
 git add .gitignore .gitattributes
@@ -105,7 +105,7 @@ Expected: the commit removes only .superpowers/ index entries and updates the tw
 - Consumes: package-lock.json, npm scripts test and build, and the public root documentation files.
 - Produces: GitHub Actions CI workflow and README navigation to public project documentation.
 
-- [ ] **Step 1: 记录缺少公开入口的失败基线**
+- [x] **Step 1: 记录缺少公开入口的失败基线**
 
 运行：
 
@@ -117,7 +117,7 @@ if ($LASTEXITCODE -eq 0) { throw 'README navigation sections unexpectedly exist.
 
 Expected: two checks show that public CI and README navigation do not yet exist.
 
-- [ ] **Step 2: 创建最小只读 CI 工作流**
+- [x] **Step 2: 创建最小只读 CI 工作流**
 
 创建 .github/workflows/ci.yml：
 
@@ -147,7 +147,7 @@ jobs:
       - run: npm run build
 ~~~
 
-- [ ] **Step 3: 在 README 添加结构与文档导航**
+- [x] **Step 3: 在 README 添加结构与文档导航**
 
 在开头产品介绍之后、功能标题之前插入：
 
@@ -168,7 +168,7 @@ jobs:
 - [第三方资源](docs/third-party-assets.md)
 ~~~
 
-- [ ] **Step 4: 静态验证 CI 与 README 入口**
+- [x] **Step 4: 静态验证 CI 与 README 入口**
 
 运行：
 
@@ -187,7 +187,7 @@ git diff --check
 
 Expected: all assertions pass, both README headings are found, and the whitespace check is clean.
 
-- [ ] **Step 5: Run application verification and commit public repository entrypoints**
+- [x] **Step 5: Run application verification and commit public repository entrypoints**
 
 ~~~powershell
 npm test
@@ -208,7 +208,7 @@ Expected: 6 Vitest files / 134 tests and the production build pass; the commit c
 - Consumes: verified branch fix/guidance-hardening-final-review, base branch main, and remote git@github.com:1173598855-dot/-plus.git.
 - Produces: fast-forwarded local main and a remote main that points to the same verified commit.
 
-- [ ] **Step 1: Verify the branch tip before integration**
+- [x] **Step 1: Verify the branch tip before integration**
 
 运行：
 
@@ -221,7 +221,7 @@ git status --short
 
 Expected: 6 Vitest files / 134 tests pass, the build passes, git diff --check produces no output, and git status --short is empty.
 
-- [ ] **Step 2: Fast-forward main without rewriting history**
+- [x] **Step 2: Fast-forward main without rewriting history**
 
 运行：
 
@@ -233,7 +233,7 @@ npm test
 
 Expected: main advances without a merge commit, and the complete test suite still passes. Leave fix/guidance-hardening-final-review intact for local traceability.
 
-- [ ] **Step 3: Configure and inspect the GitHub remote without overwriting it**
+- [x] **Step 3: Configure and inspect the GitHub remote without overwriting it**
 
 运行：
 
@@ -258,7 +258,7 @@ if ($remoteMainLine) {
 
 Expected: origin resolves to the expected SSH URL. If the remote has main, it is fetched and proven to be an ancestor of local main; otherwise the command stops before any push. No force-push is permitted.
 
-- [ ] **Step 4: Push only the verified default branch and prove remote parity**
+- [x] **Step 4: Push only the verified default branch and prove remote parity**
 
 运行：
 
@@ -271,7 +271,7 @@ if ($local -ne $remote) { throw "Remote main '$remote' does not match local main
 
 Expected: push succeeds without force, and local/remote main commit IDs are identical.
 
-- [ ] **Step 5: Report final repository state**
+- [x] **Step 5: Report final repository state**
 
 运行：
 
