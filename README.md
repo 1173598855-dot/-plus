@@ -2,6 +2,21 @@
 
 一个本地优先的个人任务管理工作台。当前版本使用 React、TypeScript、Vite 和 Vitest 构建，任务数据保存在浏览器 localStorage 中。
 
+## 项目结构
+
+- `src/`：React 应用、任务领域逻辑和测试。
+- `public/`：浏览器静态资源。
+- `docs/`：产品路线图、设计规范和第三方资源记录。
+- 根目录：安装、构建和 TypeScript/Vite 配置。
+
+## 项目文档
+
+- [产品定位](PRODUCT.md)
+- [架构说明](ARCHITECTURE.md)
+- [设计规范](DESIGN.md)
+- [优化路线图](docs/optimization-roadmap.md)
+- [第三方资源](docs/third-party-assets.md)
+
 ## 功能
 
 - 创建、编辑、完成、重新打开、删除任务
