@@ -1,5 +1,8 @@
 # Guidance Audit Hardening Implementation Plan
 
+> **Status:** Complete. Tasks 1-5 and the final hardening review landed in implementation commit `ee2d4b0`.
+> A fresh 2026-08-02 verification passed: 6 Vitest files / 134 tests, production build, and `git diff --check`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Close the correctness, recovery, editing, date, import, and ordering gaps found by the repository-wide audit while preserving the validated task-manager workflows and visual system.
@@ -38,7 +41,7 @@
 - Produces: `decodeTaskArray(value: unknown): Task[] | undefined` and `readJson<T>(key, storage?): JsonReadResult<T>`.
 - Consumes: `normalizeTasks`, `seedTasks`, and `personal-task-manager.tasks.v1`.
 
-- [ ] **Step 1: Add decoder failure tests**
+- [x] **Step 1: Add decoder failure tests**
 
 Add focused cases that reject a whitespace title, impossible date, invalid timestamp, duplicate ids, a future object version, excessive field lengths, and unknown fields while preserving legacy raw arrays:
 
@@ -58,17 +61,17 @@ it('rejects unsupported object backup versions', () => {
 });
 ```
 
-- [ ] **Step 2: Run decoder tests RED**
+- [x] **Step 2: Run decoder tests RED**
 
 Run: `npm test -- src/features/tasks/taskBackup.test.ts`
 
 Expected: the new semantic validation cases fail because the current decoder only checks primitive types and ignores version/unknown fields.
 
-- [ ] **Step 3: Implement a whitelist decoder**
+- [x] **Step 3: Implement a whitelist decoder**
 
 Create explicit validation helpers and construct a new object containing only the 13 base fields plus the three compatible optional fields before calling `normalizeTasks`. Reject duplicate ids at collection scope and use real calendar validation rather than regex alone.
 
-- [ ] **Step 4: Add storage result and startup recovery tests**
+- [x] **Step 4: Add storage result and startup recovery tests**
 
 ```ts
 it('returns an invalid result with the original raw JSON', () => {
@@ -86,17 +89,17 @@ it('mounts with recovery actions without overwriting a damaged snapshot', () => 
 
 Also cover a throwing `window.localStorage` getter and verify load falls back without a mount exception.
 
-- [ ] **Step 5: Run storage/startup tests RED**
+- [x] **Step 5: Run storage/startup tests RED**
 
 Run: `npm test -- src/lib/storage.test.ts src/features/tasks/TaskWorkspace.test.tsx -t "storage|stored|recovery|damaged"`
 
 Expected: the result API and recovery controls do not exist, and wrong-shape JSON currently crashes at `normalizeTasks().map`.
 
-- [ ] **Step 6: Implement recovery state**
+- [x] **Step 6: Implement recovery state**
 
 Use a lazy initial read that distinguishes missing, valid, invalid, and unavailable storage. Keep invalid raw text in state, skip persistence while unresolved, and expose commands to download the raw value, retry the storage read, or explicitly reset using the currently displayed tasks. A confirmed import replacement or merge resolves recovery and resumes persistence.
 
-- [ ] **Step 7: Verify Task 1 GREEN**
+- [x] **Step 7: Verify Task 1 GREEN**
 
 Run:
 
@@ -123,7 +126,7 @@ Expected: all focused decoder and recovery tests pass with no uncaught console e
 - Consumes: `onPatch(task, patch)`, `labelsFromInput`, and `labelsToInput`.
 - Produces: raw text drafts keyed by the current task id; valid normalized task patches remain owned by `TaskWorkspace`.
 
-- [ ] **Step 1: Add real typing regression tests**
+- [x] **Step 1: Add real typing regression tests**
 
 ```tsx
 it('supports natural multi-word and comma-separated typing in task details', async () => {
@@ -148,17 +151,17 @@ it('supports natural multi-word and comma-separated typing in task details', asy
 });
 ```
 
-- [ ] **Step 2: Run detail test RED**
+- [x] **Step 2: Run detail test RED**
 
 Run: `npm test -- src/features/tasks/TaskWorkspace.test.tsx -t "natural multi-word"`
 
 Expected: clearing the title throws and typed spaces/commas disappear.
 
-- [ ] **Step 3: Implement raw detail drafts**
+- [x] **Step 3: Implement raw detail drafts**
 
 Keep raw `title`, `notes`, `project`, and label input state in `TaskDetailPanel`, reset it when `task.id` changes, and use those values to control the inputs. Send non-empty title patches and all other patches through the existing callback; normalize the visible draft on blur.
 
-- [ ] **Step 4: Add literal status-message regression test**
+- [x] **Step 4: Add literal status-message regression test**
 
 ```tsx
 it('announces task text literally without displaying HTML entities', async () => {
@@ -170,17 +173,17 @@ it('announces task text literally without displaying HTML entities', async () =>
 });
 ```
 
-- [ ] **Step 5: Run message test RED, then remove manual HTML encoding**
+- [x] **Step 5: Run message test RED, then remove manual HTML encoding**
 
 Run: `npm test -- src/features/tasks/TaskWorkspace.test.tsx -t "HTML entities"`
 
 Expected: the current message contains literal `&lt;`/`&amp;` text. Remove `sanitizeHtml`; React text nodes already escape markup.
 
-- [ ] **Step 6: Refactor hard-coded component copy while GREEN**
+- [x] **Step 6: Refactor hard-coded component copy while GREEN**
 
 Move component labels, accessible-name factories, table headings, status summaries, and operation-message factories into `taskUiText.ts`. Keep decoder errors in `taskBackup.ts` to avoid a domain-to-UI dependency.
 
-- [ ] **Step 7: Verify Task 2 GREEN**
+- [x] **Step 7: Verify Task 2 GREEN**
 
 Run: `npm test -- src/features/tasks/TaskWorkspace.test.tsx`
 
@@ -200,7 +203,7 @@ Expected: the complete workspace suite passes, including drawer focus and all ex
 - Produces: `todayIso(date?: Date): string` using local calendar fields.
 - Consumes: browser timers and `visibilitychange` to refresh workspace date state.
 
-- [ ] **Step 1: Add a local-date unit test**
+- [x] **Step 1: Add a local-date unit test**
 
 ```ts
 it('uses local calendar fields instead of the UTC date', () => {
@@ -212,27 +215,27 @@ it('uses local calendar fields instead of the UTC date', () => {
 });
 ```
 
-- [ ] **Step 2: Run date test RED**
+- [x] **Step 2: Run date test RED**
 
 Run: `npm test -- src/lib/date.test.ts`
 
 Expected: current `todayIso` ignores the argument and returns a UTC-derived date.
 
-- [ ] **Step 3: Implement local date formatting**
+- [x] **Step 3: Implement local date formatting**
 
-Format `getFullYear()`, `getMonth() + 1`, and `getDate()` with two-digit month/day padding. Keep `formatDate` defensive by returning `无日期` for invalid input instead of throwing.
+Format `getFullYear()`, `getMonth() + 1`, and `getDate()` with two-digit month/day padding. Keep `formatDate` defensive by returning its caller-provided fallback for invalid input instead of throwing; UI call sites supply `dueFilterLabels.none`.
 
-- [ ] **Step 4: Add a midnight rollover integration test**
+- [x] **Step 4: Add a midnight rollover integration test**
 
 Set fake time to local `2026-07-03 23:59:59.900`, render, switch to Today, verify the July 4 seed task is absent, advance past midnight, and verify it appears without remounting.
 
-- [ ] **Step 5: Run rollover test RED, then implement refresh scheduling**
+- [x] **Step 5: Run rollover test RED, then implement refresh scheduling**
 
 Run: `npm test -- src/features/tasks/TaskWorkspace.test.tsx -t "local midnight"`
 
 Expected: current empty-dependency `useMemo` never updates. Replace it with date state, schedule the next local midnight, refresh on visible/focus, and clean up timer/listeners.
 
-- [ ] **Step 6: Verify Task 3 GREEN**
+- [x] **Step 6: Verify Task 3 GREEN**
 
 Run: `npm test -- src/lib/date.test.ts src/features/tasks/TaskWorkspace.test.tsx -t "local|midnight|today"`
 
@@ -254,35 +257,35 @@ Expected: local-date and rollover cases pass with existing Today-view tests.
 - Produces: nullable pending-import state, last-request-wins import token, reset file input, `nextTaskSortOrder(tasks, status)`, and linear-time `moveTask` reconstruction.
 - Consumes: full unfiltered task state when calculating column drop positions.
 
-- [ ] **Step 1: Add empty-backup and import-race tests**
+- [x] **Step 1: Add empty-backup and import-race tests**
 
 Cover a valid `tasks: []` backup that still displays confirmation and replaces the library with zero tasks. Add two deferred `File.text()` promises and verify the earlier/slower file cannot replace the later preview; assert the file input is cleared after capture so the same path can be chosen again.
 
-- [ ] **Step 2: Run import lifecycle tests RED**
+- [x] **Step 2: Run import lifecycle tests RED**
 
 Run: `npm test -- src/features/tasks/TaskWorkspace.test.tsx -t "empty backup|latest import|same file"`
 
 Expected: empty imports have no buttons, stale reads overwrite newer state, and the input retains the selected file.
 
-- [ ] **Step 3: Implement nullable pending state and request tokens**
+- [x] **Step 3: Implement nullable pending state and request tokens**
 
 Use `Task[] | null`, render confirmation whenever it is non-null, invalidate outstanding reads on newer selection/cancel, and clear the native file input immediately after capturing its `File`. Enforce the 5 MiB file limit before `file.text()`.
 
-- [ ] **Step 4: Add filtered-drop and append-order tests**
+- [x] **Step 4: Add filtered-drop and append-order tests**
 
 Add a filtered cross-column background drop case that clears filters and asserts the moved item is last in the full target column. Add a target column containing an imported task with a future/high `sortOrder`, create through the column form, and assert the new task remains last.
 
-- [ ] **Step 5: Run ordering tests RED**
+- [x] **Step 5: Run ordering tests RED**
 
 Run: `npm test -- src/features/tasks/TaskWorkspace.test.tsx -t "filtered column drop|high sort order"`
 
 Expected: the current code uses filtered target length and current-time sort order, so both assertions fail.
 
-- [ ] **Step 6: Implement full-state drop and explicit append order**
+- [x] **Step 6: Implement full-state drop and explicit append order**
 
 Compute column background target length inside the `setTasks(current => ...)` updater. Add `nextTaskSortOrder` to the pure domain module and pass it when creating a column task. Replace the nested `.find` in `moveTask` with an id map so reconstruction is `O(N + K log K)`.
 
-- [ ] **Step 7: Verify Task 4 GREEN**
+- [x] **Step 7: Verify Task 4 GREEN**
 
 Run:
 
@@ -307,15 +310,15 @@ Expected: domain and complete workspace suites pass.
 **Interfaces:**
 - Documents: component boundaries, overlay details on tablet/mobile, backup validation/limits, recoverable storage, local date semantics, and current multi-tab boundary.
 
-- [ ] **Step 1: Correct documentation drift**
+- [x] **Step 1: Correct documentation drift**
 
 Update `ARCHITECTURE.md` so it lists the split UI components instead of calling `TaskWorkspace` the only UI component. Update `DESIGN.md` so tablet/mobile detail behavior matches the implemented full-screen/overlay drawer rather than saying it sits below the main view.
 
-- [ ] **Step 2: Document hardening behavior and remaining boundary**
+- [x] **Step 2: Document hardening behavior and remaining boundary**
 
 Add backup limits, invalid-snapshot recovery, empty backup replacement, local-day rollover, and last-selected import semantics. State that simultaneous multi-tab editing remains last-write-wins and is not conflict-merged.
 
-- [ ] **Step 3: Run complete automated verification**
+- [x] **Step 3: Run complete automated verification**
 
 ```powershell
 npm test
@@ -325,11 +328,11 @@ git diff --check
 
 Expected: every Vitest file passes, TypeScript and Vite build exit 0, and whitespace check exits 0.
 
-- [ ] **Step 4: Run Playwright browser acceptance**
+- [x] **Step 4: Run Playwright browser acceptance**
 
 At `1440x900`, `1024x768`, and `390x844`, verify initial rendering, quick add, column add, natural detail typing, empty/import confirmation, drawer focus/close, mobile filter disclosure, no page horizontal overflow, no overlap, no broken assets, and no console errors. Save fresh screenshots under `output/playwright/`.
 
-- [ ] **Step 5: Final review**
+- [x] **Step 5: Final review**
 
 Review the full working-tree diff against this plan and the four project guidance documents. Run the full verification commands again after any review fix.
 

@@ -1,0 +1,1237 @@
+﻿=== COMMITS ===
+c9aa29d fix: harden task storage recovery
+a908293 fix: harden task storage recovery
+
+=== STAT ===
+ .../sdd/guidance-hardening-task-1-report.md        |  45 +++
+ .../plans/2026-07-28-guidance-audit-hardening.md   | 354 +++++++++++++++++++++
+ src/features/tasks/TaskQuickAdd.tsx                |  21 ++
+ src/features/tasks/TaskWorkspace.test.tsx          | 106 ++++++
+ src/features/tasks/TaskWorkspace.tsx               |  55 +++-
+ src/features/tasks/taskBackup.test.ts              |  31 +-
+ src/features/tasks/taskBackup.ts                   |  88 +++--
+ src/features/tasks/taskUiText.ts                   |   4 +
+ src/lib/storage.test.ts                            |  33 +-
+ src/lib/storage.ts                                 |  35 +-
+ 10 files changed, 737 insertions(+), 35 deletions(-)
+
+=== DIFF ===
+diff --git a/.superpowers/sdd/guidance-hardening-task-1-report.md b/.superpowers/sdd/guidance-hardening-task-1-report.md
+new file mode 100644
+index 0000000..ba94cc7
+--- /dev/null
++++ b/.superpowers/sdd/guidance-hardening-task-1-report.md
+@@ -0,0 +1,45 @@
++# Task 1 Report: Task Decoder And Recoverable Storage
++
++Status: DONE
++
++## RED Evidence
++
++- `npm test -- src/features/tasks/taskBackup.test.ts`
++  - Expected: the new decoder API should be absent before implementation.
++  - Observed: 2 failures, `TypeError: decodeTaskArray is not a function`.
++- `npm test -- src/features/tasks/taskBackup.test.ts`
++  - Expected: legacy optional fields must remain compatible after the first decoder implementation.
++  - Observed: 1 failure; legacy `sortOrder` was normalized to `0` instead of `1000`.
++- `npm test -- src/lib/storage.test.ts`
++  - Expected: the result API should be absent before implementation.
++  - Observed: 1 failure, `TypeError: readJson is not a function`.
++- `npm test -- src/lib/storage.test.ts src/features/tasks/TaskWorkspace.test.tsx -t "storage|stored|recovery|damaged"`
++  - Expected: recovery controls and write protection should be absent before implementation.
++  - Observed: 5 failures; recovery controls were missing and invalid local data was replaced by seed tasks.
++
++## GREEN Evidence
++
++- `npm test -- src/features/tasks/taskBackup.test.ts`: 8 passed after the initial decoder cycle; final run: 19 passed.
++- `npm test -- src/lib/storage.test.ts`: 5 passed after the initial storage cycle; final run: 7 passed.
++- `npm test -- src/lib/storage.test.ts src/features/tasks/TaskWorkspace.test.tsx -t "storage|stored|recovery|damaged"`: 13 passed.
++- `npm test -- src/features/tasks/taskBackup.test.ts src/lib/storage.test.ts src/features/tasks/TaskWorkspace.test.tsx`: 88 passed.
++- Final required focused run, `npm test -- src/features/tasks/TaskWorkspace.test.tsx -t "storage|stored|recovery|damaged"`: 8 passed, 54 skipped.
++- `npx tsc --noEmit`: passed.
++- `git diff --check`: passed.
++
++## Files Changed And Design Notes
++
++- `src/features/tasks/taskBackup.ts` and test: add a strict, whitelisting `decodeTaskArray` with size, field, date, timestamp, completion, duplicate-id, unknown-field, and legacy-option validation. Backup imports share this decoder and reject unsupported versions.
++- `src/lib/storage.ts` and test: add a discriminated `readJson` result that preserves raw invalid JSON and protects browser-storage access with `try` handling. Existing load/save APIs remain compatible.
++- `src/features/tasks/TaskWorkspace.tsx`, `TaskQuickAdd.tsx`, `taskUiText.ts`, and test: decode local data before use; retain invalid raw snapshots, skip writes while recovery is unresolved, and provide download, retry, explicit reset, and import-resolution actions.
++- `docs/superpowers/plans/2026-07-28-guidance-audit-hardening.md`: included as required by Task 1.
++
++## Self-Review And Concerns
++
++- Decoder output is explicitly reconstructed, so unknown persisted task fields cannot round-trip.
++- Valid empty arrays remain valid decoder/import values. The existing Task 4 nullable empty-import preview behavior is intentionally not introduced here.
++- A Vitest parallel rerun briefly resolved the repository through an isolated cwd and could not locate source files. Sequential and `npm --prefix` reruns completed successfully; this is a test-runner environment artifact, not a product failure.
++
++## Commit
++
++- `a908293` (implementation commit).
+diff --git a/docs/superpowers/plans/2026-07-28-guidance-audit-hardening.md b/docs/superpowers/plans/2026-07-28-guidance-audit-hardening.md
+new file mode 100644
+index 0000000..4921f54
+--- /dev/null
++++ b/docs/superpowers/plans/2026-07-28-guidance-audit-hardening.md
+@@ -0,0 +1,354 @@
++# Guidance Audit Hardening Implementation Plan
++
++> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
++
++**Goal:** Close the correctness, recovery, editing, date, import, and ordering gaps found by the repository-wide audit while preserving the validated task-manager workflows and visual system.
++
++**Architecture:** Keep `TaskWorkspace` as the single task-state owner, keep domain rules pure and deterministic, and reuse one strict task decoder for backups and local snapshots. UI components may own ephemeral raw form text and recovery disclosure state, but persisted task data continues to flow through domain functions and the existing localStorage key.
++
++**Tech Stack:** React 19, TypeScript, Vite, Vitest, Testing Library, browser localStorage, plain CSS, lucide-react.
++
++## Global Constraints
++
++- Keep the storage key exactly `personal-task-manager.tasks.v1` and the supported object backup version exactly `1`.
++- Preserve raw task-array import compatibility and legacy tasks that omit `sortOrder`, `estimateMinutes`, and `energy`.
++- Do not add dependencies, accounts, cloud sync, collaboration, remote resources, a component library, or a state-management framework.
++- Keep `TaskWorkspace` as the only owner of the task array; task text drafts and import/recovery state remain ephemeral UI state.
++- Preserve all existing create, filter, view, bulk, drag, backup, keyboard, drawer, full-height, responsive, focus, and reduced-motion behavior.
++- Keep user-facing Chinese copy in `taskUiText.ts`, except backup decoder error constants that remain with the decoder and are re-exported for tests.
++- Validate imported files before state changes: at most 5 MiB, at most 10,000 tasks, unique non-empty ids, non-empty titles, real ISO dates/timestamps, bounded text/labels, and no unknown persisted fields.
++- Invalid stored JSON or schema must not crash or overwrite the original raw value automatically; the UI must offer download, retry, and explicit reset/replacement paths.
++- `npm test`, `npm run build`, `git diff --check`, and desktop/mobile browser acceptance must pass.
++
++---
++
++### Task 1: Task Decoder And Recoverable Storage
++
++**Files:**
++- Modify: `src/features/tasks/taskBackup.test.ts`
++- Modify: `src/features/tasks/taskBackup.ts`
++- Modify: `src/lib/storage.test.ts`
++- Modify: `src/lib/storage.ts`
++- Modify: `src/features/tasks/TaskWorkspace.test.tsx`
++- Modify: `src/features/tasks/TaskWorkspace.tsx`
++- Modify: `src/features/tasks/TaskQuickAdd.tsx`
++- Modify: `src/features/tasks/taskUiText.ts`
++
++**Interfaces:**
++- Produces: `decodeTaskArray(value: unknown): Task[] | undefined` and `readJson<T>(key, storage?): JsonReadResult<T>`.
++- Consumes: `normalizeTasks`, `seedTasks`, and `personal-task-manager.tasks.v1`.
++
++- [ ] **Step 1: Add decoder failure tests**
++
++Add focused cases that reject a whitespace title, impossible date, invalid timestamp, duplicate ids, a future object version, excessive field lengths, and unknown fields while preserving legacy raw arrays:
++
++```ts
++it.each([
++  [{ ...task, title: '   ' }],
++  [{ ...task, dueDate: '2026-02-30' }],
++  [{ ...task, createdAt: 'yesterday' }],
++  [{ ...task }, { ...task }],
++  [{ ...task, hiddenSecret: 'must-not-round-trip' }],
++])('rejects unsafe task data %#', (tasks) => {
++  expect(() => importTasksFromJson(JSON.stringify(tasks))).toThrow();
++});
++
++it('rejects unsupported object backup versions', () => {
++  expect(() => importTasksFromJson(JSON.stringify({ version: 2, tasks: [task] }))).toThrow('不支持的任务备份版本。');
++});
++```
++
++- [ ] **Step 2: Run decoder tests RED**
++
++Run: `npm test -- src/features/tasks/taskBackup.test.ts`
++
++Expected: the new semantic validation cases fail because the current decoder only checks primitive types and ignores version/unknown fields.
++
++- [ ] **Step 3: Implement a whitelist decoder**
++
++Create explicit validation helpers and construct a new object containing only the 13 base fields plus the three compatible optional fields before calling `normalizeTasks`. Reject duplicate ids at collection scope and use real calendar validation rather than regex alone.
++
++- [ ] **Step 4: Add storage result and startup recovery tests**
++
++```ts
++it('returns an invalid result with the original raw JSON', () => {
++  const storage = createStorage('{broken');
++  expect(readJson('tasks', storage)).toMatchObject({ status: 'invalid', raw: '{broken' });
++});
++
++it('mounts with recovery actions without overwriting a damaged snapshot', () => {
++  localStorage.setItem('personal-task-manager.tasks.v1', JSON.stringify({ unexpected: true }));
++  render(<TaskWorkspace />);
++  expect(screen.getByRole('button', { name: '下载损坏的原始数据' })).toBeInTheDocument();
++  expect(localStorage.getItem('personal-task-manager.tasks.v1')).toBe(JSON.stringify({ unexpected: true }));
++});
++```
++
++Also cover a throwing `window.localStorage` getter and verify load falls back without a mount exception.
++
++- [ ] **Step 5: Run storage/startup tests RED**
++
++Run: `npm test -- src/lib/storage.test.ts src/features/tasks/TaskWorkspace.test.tsx -t "storage|stored|recovery|damaged"`
++
++Expected: the result API and recovery controls do not exist, and wrong-shape JSON currently crashes at `normalizeTasks().map`.
++
++- [ ] **Step 6: Implement recovery state**
++
++Use a lazy initial read that distinguishes missing, valid, invalid, and unavailable storage. Keep invalid raw text in state, skip persistence while unresolved, and expose commands to download the raw value, retry the storage read, or explicitly reset using the currently displayed tasks. A confirmed import replacement or merge resolves recovery and resumes persistence.
++
++- [ ] **Step 7: Verify Task 1 GREEN**
++
++Run:
++
++```powershell
++npm test -- src/features/tasks/taskBackup.test.ts src/lib/storage.test.ts
++npm test -- src/features/tasks/TaskWorkspace.test.tsx -t "storage|stored|recovery|damaged"
++```
++
++Expected: all focused decoder and recovery tests pass with no uncaught console errors.
++
++---
++
++### Task 2: Natural Detail Editing And Copy Contracts
++
++**Files:**
++- Modify: `src/features/tasks/TaskWorkspace.test.tsx`
++- Modify: `src/features/tasks/TaskDetailPanel.tsx`
++- Modify: `src/features/tasks/TaskToolbar.tsx`
++- Modify: `src/features/tasks/TaskViews.tsx`
++- Modify: `src/features/tasks/TaskWorkspace.tsx`
++- Modify: `src/features/tasks/taskUiText.ts`
++
++**Interfaces:**
++- Consumes: `onPatch(task, patch)`, `labelsFromInput`, and `labelsToInput`.
++- Produces: raw text drafts keyed by the current task id; valid normalized task patches remain owned by `TaskWorkspace`.
++
++- [ ] **Step 1: Add real typing regression tests**
++
++```tsx
++it('supports natural multi-word and comma-separated typing in task details', async () => {
++  const user = userEvent.setup();
++  render(<TaskWorkspace />);
++  await user.click(screen.getByRole('button', { name: '查看详情：任务管理库第一篇文档' }));
++
++  const title = screen.getByLabelText('详情标题');
++  await user.clear(title);
++  await user.type(title, '新的 任务标题');
++  expect(title).toHaveValue('新的 任务标题');
++
++  const notes = screen.getByLabelText('详情备注');
++  await user.clear(notes);
++  await user.type(notes, '第一段 第二段');
++  expect(notes).toHaveValue('第一段 第二段');
++
++  const labels = screen.getByLabelText('标签');
++  await user.clear(labels);
++  await user.type(labels, '开发, 审查');
++  expect(labels).toHaveValue('开发, 审查');
++});
++```
++
++- [ ] **Step 2: Run detail test RED**
++
++Run: `npm test -- src/features/tasks/TaskWorkspace.test.tsx -t "natural multi-word"`
++
++Expected: clearing the title throws and typed spaces/commas disappear.
++
++- [ ] **Step 3: Implement raw detail drafts**
++
++Keep raw `title`, `notes`, `project`, and label input state in `TaskDetailPanel`, reset it when `task.id` changes, and use those values to control the inputs. Send non-empty title patches and all other patches through the existing callback; normalize the visible draft on blur.
++
++- [ ] **Step 4: Add literal status-message regression test**
++
++```tsx
++it('announces task text literally without displaying HTML entities', async () => {
++  const user = userEvent.setup();
++  render(<TaskWorkspace />);
++  await user.type(screen.getByLabelText('任务标题'), '<审查 & 修复>');
++  await user.click(screen.getByRole('button', { name: '添加任务' }));
++  expect(screen.getByRole('status')).toHaveTextContent('已创建任务“<审查 & 修复>”。');
++});
++```
++
++- [ ] **Step 5: Run message test RED, then remove manual HTML encoding**
++
++Run: `npm test -- src/features/tasks/TaskWorkspace.test.tsx -t "HTML entities"`
++
++Expected: the current message contains literal `&lt;`/`&amp;` text. Remove `sanitizeHtml`; React text nodes already escape markup.
++
++- [ ] **Step 6: Refactor hard-coded component copy while GREEN**
++
++Move component labels, accessible-name factories, table headings, status summaries, and operation-message factories into `taskUiText.ts`. Keep decoder errors in `taskBackup.ts` to avoid a domain-to-UI dependency.
++
++- [ ] **Step 7: Verify Task 2 GREEN**
++
++Run: `npm test -- src/features/tasks/TaskWorkspace.test.tsx`
++
++Expected: the complete workspace suite passes, including drawer focus and all existing accessible-name queries.
++
++---
++
++### Task 3: Local Calendar Date And Midnight Rollover
++
++**Files:**
++- Create: `src/lib/date.test.ts`
++- Modify: `src/lib/date.ts`
++- Modify: `src/features/tasks/TaskWorkspace.test.tsx`
++- Modify: `src/features/tasks/TaskWorkspace.tsx`
++
++**Interfaces:**
++- Produces: `todayIso(date?: Date): string` using local calendar fields.
++- Consumes: browser timers and `visibilitychange` to refresh workspace date state.
++
++- [ ] **Step 1: Add a local-date unit test**
++
++```ts
++it('uses local calendar fields instead of the UTC date', () => {
++  const date = new Date('2026-01-01T16:30:00.000Z');
++  vi.spyOn(date, 'getFullYear').mockReturnValue(2026);
++  vi.spyOn(date, 'getMonth').mockReturnValue(0);
++  vi.spyOn(date, 'getDate').mockReturnValue(2);
++  expect(todayIso(date)).toBe('2026-01-02');
++});
++```
++
++- [ ] **Step 2: Run date test RED**
++
++Run: `npm test -- src/lib/date.test.ts`
++
++Expected: current `todayIso` ignores the argument and returns a UTC-derived date.
++
++- [ ] **Step 3: Implement local date formatting**
++
++Format `getFullYear()`, `getMonth() + 1`, and `getDate()` with two-digit month/day padding. Keep `formatDate` defensive by returning `无日期` for invalid input instead of throwing.
++
++- [ ] **Step 4: Add a midnight rollover integration test**
++
++Set fake time to local `2026-07-03 23:59:59.900`, render, switch to Today, verify the July 4 seed task is absent, advance past midnight, and verify it appears without remounting.
++
++- [ ] **Step 5: Run rollover test RED, then implement refresh scheduling**
++
++Run: `npm test -- src/features/tasks/TaskWorkspace.test.tsx -t "local midnight"`
++
++Expected: current empty-dependency `useMemo` never updates. Replace it with date state, schedule the next local midnight, refresh on visible/focus, and clean up timer/listeners.
++
++- [ ] **Step 6: Verify Task 3 GREEN**
++
++Run: `npm test -- src/lib/date.test.ts src/features/tasks/TaskWorkspace.test.tsx -t "local|midnight|today"`
++
++Expected: local-date and rollover cases pass with existing Today-view tests.
++
++---
++
++### Task 4: Import Lifecycle And Ordering Correctness
++
++**Files:**
++- Modify: `src/features/tasks/TaskWorkspace.test.tsx`
++- Modify: `src/features/tasks/TaskWorkspace.tsx`
++- Modify: `src/features/tasks/TaskQuickAdd.tsx`
++- Modify: `src/features/tasks/taskUiText.ts`
++- Modify: `src/features/tasks/taskDomain.test.ts`
++- Modify: `src/features/tasks/taskDomain.ts`
++
++**Interfaces:**
++- Produces: nullable pending-import state, last-request-wins import token, reset file input, `nextTaskSortOrder(tasks, status)`, and linear-time `moveTask` reconstruction.
++- Consumes: full unfiltered task state when calculating column drop positions.
++
++- [ ] **Step 1: Add empty-backup and import-race tests**
++
++Cover a valid `tasks: []` backup that still displays confirmation and replaces the library with zero tasks. Add two deferred `File.text()` promises and verify the earlier/slower file cannot replace the later preview; assert the file input is cleared after capture so the same path can be chosen again.
++
++- [ ] **Step 2: Run import lifecycle tests RED**
++
++Run: `npm test -- src/features/tasks/TaskWorkspace.test.tsx -t "empty backup|latest import|same file"`
++
++Expected: empty imports have no buttons, stale reads overwrite newer state, and the input retains the selected file.
++
++- [ ] **Step 3: Implement nullable pending state and request tokens**
++
++Use `Task[] | null`, render confirmation whenever it is non-null, invalidate outstanding reads on newer selection/cancel, and clear the native file input immediately after capturing its `File`. Enforce the 5 MiB file limit before `file.text()`.
++
++- [ ] **Step 4: Add filtered-drop and append-order tests**
++
++Add a filtered cross-column background drop case that clears filters and asserts the moved item is last in the full target column. Add a target column containing an imported task with a future/high `sortOrder`, create through the column form, and assert the new task remains last.
++
++- [ ] **Step 5: Run ordering tests RED**
++
++Run: `npm test -- src/features/tasks/TaskWorkspace.test.tsx -t "filtered column drop|high sort order"`
++
++Expected: the current code uses filtered target length and current-time sort order, so both assertions fail.
++
++- [ ] **Step 6: Implement full-state drop and explicit append order**
++
++Compute column background target length inside the `setTasks(current => ...)` updater. Add `nextTaskSortOrder` to the pure domain module and pass it when creating a column task. Replace the nested `.find` in `moveTask` with an id map so reconstruction is `O(N + K log K)`.
++
++- [ ] **Step 7: Verify Task 4 GREEN**
++
++Run:
++
++```powershell
++npm test -- src/features/tasks/taskDomain.test.ts
++npm test -- src/features/tasks/TaskWorkspace.test.tsx
++```
++
++Expected: domain and complete workspace suites pass.
++
++---
++
++### Task 5: Documentation And Release Verification
++
++**Files:**
++- Modify: `ARCHITECTURE.md`
++- Modify: `DESIGN.md`
++- Modify: `README.md`
++- Modify: `docs/optimization-roadmap.md`
++- Modify: `.superpowers/sdd/progress.md`
++
++**Interfaces:**
++- Documents: component boundaries, overlay details on tablet/mobile, backup validation/limits, recoverable storage, local date semantics, and current multi-tab boundary.
++
++- [ ] **Step 1: Correct documentation drift**
++
++Update `ARCHITECTURE.md` so it lists the split UI components instead of calling `TaskWorkspace` the only UI component. Update `DESIGN.md` so tablet/mobile detail behavior matches the implemented full-screen/overlay drawer rather than saying it sits below the main view.
++
++- [ ] **Step 2: Document hardening behavior and remaining boundary**
++
++Add backup limits, invalid-snapshot recovery, empty backup replacement, local-day rollover, and last-selected import semantics. State that simultaneous multi-tab editing remains last-write-wins and is not conflict-merged.
++
++- [ ] **Step 3: Run complete automated verification**
++
++```powershell
++npm test
++npm run build
++git diff --check
++```
++
++Expected: every Vitest file passes, TypeScript and Vite build exit 0, and whitespace check exits 0.
++
++- [ ] **Step 4: Run Playwright browser acceptance**
++
++At `1440x900`, `1024x768`, and `390x844`, verify initial rendering, quick add, column add, natural detail typing, empty/import confirmation, drawer focus/close, mobile filter disclosure, no page horizontal overflow, no overlap, no broken assets, and no console errors. Save fresh screenshots under `output/playwright/`.
++
++- [ ] **Step 5: Final review**
++
++Review the full working-tree diff against this plan and the four project guidance documents. Run the full verification commands again after any review fix.
++
++---
++
++## Self-Review
++
++Spec coverage:
++
++- The plan covers every high-confidence correctness issue from the intent, reliability, security, contracts, and UI audit passes.
++- It preserves current product scope and explicitly records multi-tab conflict merging as the one deferred architectural capability.
++- It includes failing tests before every production behavior change and browser checks for the user-facing workflows.
++
++Placeholder scan:
++
++- No `TBD`, generic error-handling instruction, undefined future function, or code-change step without an exact test/command remains.
++
++Type consistency:
++
++- `decodeTaskArray` returns `Task[] | undefined`; an empty valid array remains distinguishable from invalid data.
++- Pending imports use `Task[] | null`; `[]` means a valid empty import and `null` means no pending import.
++- Date state remains a `YYYY-MM-DD` string and all existing domain APIs continue to accept it unchanged.
+diff --git a/src/features/tasks/TaskQuickAdd.tsx b/src/features/tasks/TaskQuickAdd.tsx
+index d6773e3..bdaf9c7 100644
+--- a/src/features/tasks/TaskQuickAdd.tsx
++++ b/src/features/tasks/TaskQuickAdd.tsx
+@@ -6,49 +6,57 @@ import type { TaskDraft, TaskEnergy, TaskPriority, TaskStatus, TaskSummary } fro
+ 
+ export interface TaskQuickAddProps {
+   summary: TaskSummary;
+   draft: TaskDraft;
+   labelInput: string;
+   titleInputRef: Ref<HTMLInputElement>;
+   isExpanded: boolean;
+   isInert: boolean;
+   message: string;
+   pendingImportCount: number;
++  recoveryRaw: string | null;
+   onDraftChange: (draft: TaskDraft) => void;
+   onLabelInputChange: (value: string) => void;
+   onExpandedChange: (isExpanded: boolean) => void;
+   onAdd: () => void;
+   onExport: () => void;
+   onImport: (file: File | undefined) => void | Promise<void>;
+   onReplaceImport: () => void;
+   onMergeImport: () => void;
+   onCancelImport: () => void;
++  onDownloadRecovery: () => void;
++  onRetryStorage: () => void;
++  onResetStorage: () => void;
+ }
+ 
+ export function TaskQuickAdd({
+   summary,
+   draft,
+   labelInput,
+   titleInputRef,
+   isExpanded,
+   isInert,
+   message,
+   pendingImportCount,
++  recoveryRaw,
+   onDraftChange,
+   onLabelInputChange,
+   onExpandedChange,
+   onAdd,
+   onExport,
+   onImport,
+   onReplaceImport,
+   onMergeImport,
+   onCancelImport,
++  onDownloadRecovery,
++  onRetryStorage,
++  onResetStorage,
+ }: TaskQuickAddProps) {
+   return (
+     <aside className="rail" aria-label={quickAddLabels.rail} inert={isInert || undefined}>
+       <div className="brand-block">
+         <span className="brand-mark">{quickAddLabels.brandMark}</span>
+         <div>
+           <h1>{quickAddLabels.brandTitle}</h1>
+           <p>{quickAddLabels.brandSubtitle}</p>
+         </div>
+       </div>
+@@ -143,14 +151,27 @@ export function TaskQuickAdd({
+               {quickAddLabels.replace}
+             </button>
+             <button className="secondary-action" type="button" onClick={onMergeImport}>
+               {quickAddLabels.merge}
+             </button>
+             <button className="clear-filter" type="button" onClick={onCancelImport}>
+               {quickAddLabels.cancel}
+             </button>
+           </div>
+         )}
++        {recoveryRaw !== null && (
++          <div className="import-actions" aria-label={quickAddLabels.recoveryTitle}>
++            <button className="secondary-action" type="button" onClick={onDownloadRecovery}>
++              <Download size={16} /> {quickAddLabels.downloadDamagedData}
++            </button>
++            <button className="secondary-action" type="button" onClick={onRetryStorage}>
++              {quickAddLabels.retryStorage}
++            </button>
++            <button className="clear-filter" type="button" onClick={onResetStorage}>
++              {quickAddLabels.resetStorage}
++            </button>
++          </div>
++        )}
+       </section>
+     </aside>
+   );
+ }
+diff --git a/src/features/tasks/TaskWorkspace.test.tsx b/src/features/tasks/TaskWorkspace.test.tsx
+index fba964e..214499b 100644
+--- a/src/features/tasks/TaskWorkspace.test.tsx
++++ b/src/features/tasks/TaskWorkspace.test.tsx
+@@ -1,17 +1,34 @@
+ ﻿import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+ import '@testing-library/jest-dom/vitest';
+ import userEvent from '@testing-library/user-event';
+ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+ import { vi } from 'vitest';
+ import { TaskWorkspace } from './TaskWorkspace';
+ 
++const storedTask = {
++  id: 'stored-task',
++  title: '已存储任务',
++  notes: '',
++  status: 'next',
++  priority: 'medium',
++  dueDate: '',
++  project: '',
++  labels: [],
++  createdAt: '2026-07-03T12:00:00.000Z',
++  updatedAt: '2026-07-03T12:00:00.000Z',
++  completedAt: '',
++  sortOrder: 1000,
++  estimateMinutes: 0,
++  energy: 'medium',
++};
++
+ function createDataTransfer() {
+   return {
+     data: new Map<string, string>(),
+     effectAllowed: '',
+     dropEffect: '',
+     setData(type: string, value: string) {
+       this.data.set(type, value);
+     },
+     getData(type: string) {
+       return this.data.get(type) ?? '';
+@@ -68,20 +85,109 @@ describe('TaskWorkspace', () => {
+     expect(screen.getByRole('button', { name: '展开筛选（1）' })).toHaveAttribute('aria-expanded', 'false');
+     expect(screen.getByLabelText('任务筛选')).not.toHaveClass('mobile-expanded');
+   });
+ 
+   it('renders one all option in the date filter', () => {
+     render(<TaskWorkspace />);
+ 
+     expect(within(screen.getByLabelText('按日期筛选')).getAllByRole('option', { name: '全部日期' })).toHaveLength(1);
+   });
+ 
++  it.each(['{broken', JSON.stringify({ unexpected: true })])('renders recovery actions without overwriting invalid stored data', async (raw) => {
++    localStorage.setItem('personal-task-manager.tasks.v1', raw);
++
++    render(<TaskWorkspace />);
++
++    expect(screen.getByText('整理本周重点任务')).toBeInTheDocument();
++    expect(screen.getByRole('button', { name: '下载损坏的原始数据' })).toBeInTheDocument();
++    expect(screen.getByRole('button', { name: '重试本地存储' })).toBeInTheDocument();
++    expect(screen.getByRole('button', { name: '使用当前任务重置本地存储' })).toBeInTheDocument();
++    await waitFor(() => expect(localStorage.getItem('personal-task-manager.tasks.v1')).toBe(raw));
++  });
++
++  it('downloads the damaged raw storage value', async () => {
++    const user = userEvent.setup();
++    const raw = '{broken';
++    const createObjectUrl = vi.fn((_blob: Blob) => 'blob:damaged');
++    const revokeObjectUrl = vi.fn();
++    const click = vi.fn();
++    localStorage.setItem('personal-task-manager.tasks.v1', raw);
++    vi.stubGlobal('URL', { createObjectURL: createObjectUrl, revokeObjectURL: revokeObjectUrl });
++    vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
++      const element = document.createElementNS('http://www.w3.org/1999/xhtml', tagName) as HTMLElement;
++      if (tagName === 'a') element.click = click;
++      return element;
++    });
++    render(<TaskWorkspace />);
++
++    await user.click(screen.getByRole('button', { name: '下载损坏的原始数据' }));
++
++    expect(createObjectUrl).toHaveBeenCalledWith(expect.any(Blob));
++    await expect((createObjectUrl.mock.calls[0][0] as Blob).text()).resolves.toBe(raw);
++    expect(click).toHaveBeenCalledOnce();
++    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:damaged');
++  });
++
++  it('retries storage and adopts a newly valid task snapshot', async () => {
++    const user = userEvent.setup();
++    localStorage.setItem('personal-task-manager.tasks.v1', '{broken');
++    render(<TaskWorkspace />);
++    localStorage.setItem('personal-task-manager.tasks.v1', JSON.stringify([{ ...storedTask, id: 'retry-task', title: '重试后的任务' }]));
++
++    await user.click(screen.getByRole('button', { name: '重试本地存储' }));
++
++    expect(screen.getByText('重试后的任务')).toBeInTheDocument();
++    expect(screen.queryByRole('button', { name: '下载损坏的原始数据' })).not.toBeInTheDocument();
++  });
++
++  it('explicitly resets damaged storage with the currently displayed tasks', async () => {
++    const user = userEvent.setup();
++    localStorage.setItem('personal-task-manager.tasks.v1', '{broken');
++    render(<TaskWorkspace />);
++
++    await user.click(screen.getByRole('button', { name: '使用当前任务重置本地存储' }));
++
++    await waitFor(() => expect(localStorage.getItem('personal-task-manager.tasks.v1')).toContain('seed-week-plan'));
++    expect(screen.queryByRole('button', { name: '下载损坏的原始数据' })).not.toBeInTheDocument();
++  });
++
++  it('resumes persistence after a confirmed recovery import replacement', async () => {
++    const user = userEvent.setup();
++    localStorage.setItem('personal-task-manager.tasks.v1', '{broken');
++    render(<TaskWorkspace />);
++    const file = new File([JSON.stringify([storedTask])], 'recovery.json', { type: 'application/json' });
++
++    await user.upload(screen.getByLabelText('导入任务 JSON'), file);
++    await user.click(await screen.findByRole('button', { name: '替换当前任务' }));
++
++    expect(screen.queryByRole('button', { name: '下载损坏的原始数据' })).not.toBeInTheDocument();
++    await waitFor(() => expect(localStorage.getItem('personal-task-manager.tasks.v1')).toContain('stored-task'));
++  });
++
++  it('mounts seed tasks when the local storage getter throws', () => {
++    const descriptor = Object.getOwnPropertyDescriptor(window, 'localStorage');
++    Object.defineProperty(window, 'localStorage', {
++      configurable: true,
++      get() {
++        throw new Error('blocked');
++      },
++    });
++
++    try {
++      expect(() => render(<TaskWorkspace />)).not.toThrow();
++      expect(screen.getByText('整理本周重点任务')).toBeInTheDocument();
++    } finally {
++      if (descriptor) Object.defineProperty(window, 'localStorage', descriptor);
++      else delete (window as unknown as Record<string, unknown>).localStorage;
++    }
++  });
++
+   it('creates a task and persists it to localStorage', async () => {
+     const user = userEvent.setup();
+     render(<TaskWorkspace />);
+     const quickAdd = within(screen.getByLabelText('新建任务'));
+ 
+     await user.type(quickAdd.getByLabelText('任务标题'), '个人任务系统');
+     await user.click(screen.getByRole('button', { name: '展开详细字段' }));
+     await user.type(quickAdd.getByLabelText('预计用时（分钟）'), '45');
+     await user.selectOptions(quickAdd.getByLabelText('精力类型'), 'high');
+     await user.type(quickAdd.getByLabelText('项目'), '系统建设');
+diff --git a/src/features/tasks/TaskWorkspace.tsx b/src/features/tasks/TaskWorkspace.tsx
+index fdf744d..8333a0c 100644
+--- a/src/features/tasks/TaskWorkspace.tsx
++++ b/src/features/tasks/TaskWorkspace.tsx
+@@ -1,37 +1,54 @@
+ import { useEffect, useMemo, useRef, useState } from 'react';
+ import type { DragEvent } from 'react';
+ import { nowIso, todayIso } from '../../lib/date';
+ import { createId } from '../../lib/id';
+-import { loadJson, saveJson } from '../../lib/storage';
++import { readJson, saveJson } from '../../lib/storage';
+ import { createTask, deleteTask, filterTasks, groupTasksByStatus, moveTask, normalizeTasks, sortTasks, summarizeTasks, updateTask } from './taskDomain';
+-import { exportTasksToJson, importTasksFromJson } from './taskBackup';
++import { decodeTaskArray, exportTasksToJson, importTasksFromJson } from './taskBackup';
+ import { seedTasks } from './seedTasks';
+ import { TaskBulkActions } from './TaskBulkActions';
+ import { detailHeadingId, TaskDetailPanel } from './TaskDetailPanel';
+ import { TaskQuickAdd } from './TaskQuickAdd';
+ import { TaskToolbar } from './TaskToolbar';
+ import type { TaskViewMode } from './TaskToolbar';
+ import { TaskViews } from './TaskViews';
+ import { columnQuickAddLabels, dueFilterLabels, emptyMessages, labelsFromInput, priorityLabels, statusLabels, toolbarLabels } from './taskUiText';
+ import type { Task, TaskDraft, TaskFilters, TaskPriority, TaskStatus } from './taskTypes';
+ 
+ const storageKey = 'personal-task-manager.tasks.v1';
+ 
++interface TaskStorageState {
++  tasks: Task[];
++  recoveryRaw: string | null;
++}
++
++function readStoredTasks(): TaskStorageState {
++  const result = readJson<unknown>(storageKey);
++  if (result.status === 'success') {
++    const tasks = decodeTaskArray(result.value);
++    return tasks === undefined ? { tasks: normalizeTasks(seedTasks), recoveryRaw: result.raw } : { tasks, recoveryRaw: null };
++  }
++  if (result.status === 'invalid') return { tasks: normalizeTasks(seedTasks), recoveryRaw: result.raw };
++  return { tasks: normalizeTasks(seedTasks), recoveryRaw: null };
++}
++
+ const emptyDraft: TaskDraft = { title: '', notes: '', status: 'inbox', priority: 'medium', dueDate: '', project: '', labels: [], estimateMinutes: 0, energy: 'medium' };
+ 
+ const handledDropType = 'application/x-task-drop-handled';
+ const cardDropType = 'application/x-task-card-drop';
+ const drawerFocusableSelector = 'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+ 
+ export function TaskWorkspace() {
+-  const [tasks, setTasks] = useState<Task[]>(() => normalizeTasks(loadJson<Task[]>(storageKey, seedTasks)));
++  const [startup] = useState(readStoredTasks);
++  const [tasks, setTasks] = useState<Task[]>(startup.tasks);
++  const [recoveryRaw, setRecoveryRaw] = useState<string | null>(startup.recoveryRaw);
+   const [draft, setDraft] = useState<TaskDraft>(emptyDraft);
+   const [labelInput, setLabelInput] = useState('');
+   const [filters, setFilters] = useState<TaskFilters>({ status: 'all', priority: 'all', due: 'all' });
+   const [viewMode, setViewMode] = useState<TaskViewMode>('board');
+   const [selectedId, setSelectedId] = useState<string>('');
+   const [hideCompleted, setHideCompleted] = useState(false);
+   const [showDetail, setShowDetail] = useState(false);
+   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
+   const [pendingImport, setPendingImport] = useState<Task[]>([]);
+   const [message, setMessage] = useState('');
+@@ -42,26 +59,27 @@ export function TaskWorkspace() {
+   const projects = useMemo(() => [...new Set(tasks.map((task) => task.project).filter(Boolean))], [tasks]);
+   const labelOptions = useMemo(() => [...new Set(tasks.flatMap((task) => task.labels))], [tasks]);
+   const searchInputRef = useRef<HTMLInputElement>(null);
+   const titleInputRef = useRef<HTMLInputElement>(null);
+   const detailLayerRef = useRef<HTMLDivElement>(null);
+   const detailCloseButtonRef = useRef<HTMLButtonElement>(null);
+   const detailTriggerRef = useRef<HTMLElement | null>(null);
+   const today = useMemo(() => todayIso(), []);
+ 
+   useEffect(() => {
++    if (recoveryRaw !== null) return;
+     try {
+       saveJson(storageKey, tasks);
+     } catch {
+       setMessage('存储不可用，当前修改可能不会持久化。');
+     }
+-  }, [pendingImport.length, tasks]);
++  }, [recoveryRaw, tasks]);
+ 
+   useEffect(() => {
+     function isTypingTarget(target: EventTarget | null) {
+       if (!(target instanceof HTMLElement)) return false;
+       return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
+     }
+ 
+     function handleShortcut(event: KeyboardEvent) {
+       if (showDetail) return;
+ 
+@@ -292,45 +310,70 @@ export function TaskWorkspace() {
+     const anchor = document.createElement('a');
+     anchor.href = url;
+     anchor.download = `personal-tasks-${today}.json`;
+     document.body.appendChild(anchor);
+     anchor.click();
+     document.body.removeChild(anchor);
+     URL.revokeObjectURL(url);
+     setMessage('任务已导出。');
+   }
+ 
++  function downloadRecoveryData() {
++    if (recoveryRaw === null) return;
++    const blob = new Blob([recoveryRaw], { type: 'application/json' });
++    const url = URL.createObjectURL(blob);
++    const anchor = document.createElement('a');
++    anchor.href = url;
++    anchor.download = `personal-tasks-damaged-${today}.json`;
++    document.body.appendChild(anchor);
++    anchor.click();
++    document.body.removeChild(anchor);
++    URL.revokeObjectURL(url);
++  }
++
++  function retryStorage() {
++    const next = readStoredTasks();
++    setTasks(next.tasks);
++    setRecoveryRaw(next.recoveryRaw);
++  }
++
++  function resetStorage() {
++    setRecoveryRaw(null);
++  }
++
+   async function importTasks(file: File | undefined) {
+     if (!file) return;
+     try {
+       const importedTasks = importTasksFromJson(await file.text());
+       setPendingImport(importedTasks);
+       setMessage(`准备导入 ${importedTasks.length} 个任务，请选择替换或合并。`);
+     } catch (error) {
+       setPendingImport([]);
+       setMessage(error instanceof Error ? error.message : '导入失败。');
+     }
+   }
+ 
+   function replaceTasksWithImport() {
+     setTasks(pendingImport);
++    setRecoveryRaw(null);
+     setSelectedTaskIds([]);
+     setSelectedId(pendingImport[0]?.id ?? '');
+     setMessage(`已替换为 ${pendingImport.length} 个任务。`);
+     setPendingImport([]);
+   }
+ 
+   function mergeImportedTasks() {
+     const existingIds = new Set(tasks.map((task) => task.id));
+     const tasksToAdd = pendingImport.filter((task) => !existingIds.has(task.id));
+     setTasks((current) => [...tasksToAdd, ...current]);
+     setSelectedId(tasksToAdd[0]?.id ?? selectedId);
++    setRecoveryRaw(null);
+     setMessage(`已合并 ${tasksToAdd.length} 个任务，跳过 ${pendingImport.length - tasksToAdd.length} 个重复任务。`);
+     setPendingImport([]);
+   }
+ 
+   function cancelImport() {
+     setPendingImport([]);
+     setMessage('已取消导入。');
+   }
+ 
+   function handleTaskDragStart(event: DragEvent<HTMLElement>, task: Task) {
+@@ -412,29 +455,33 @@ export function TaskWorkspace() {
+     <main className="workspace">
+       <TaskQuickAdd
+         summary={summary}
+         draft={draft}
+         labelInput={labelInput}
+         titleInputRef={titleInputRef}
+         isExpanded={isQuickAddExpanded}
+         isInert={showDetail}
+         message={message}
+         pendingImportCount={pendingImport.length}
++        recoveryRaw={recoveryRaw}
+         onDraftChange={setDraft}
+         onLabelInputChange={setLabelInput}
+         onExpandedChange={setIsQuickAddExpanded}
+         onAdd={addTask}
+         onExport={exportTasks}
+         onImport={importTasks}
+         onReplaceImport={replaceTasksWithImport}
+         onMergeImport={mergeImportedTasks}
+         onCancelImport={cancelImport}
++        onDownloadRecovery={downloadRecoveryData}
++        onRetryStorage={retryStorage}
++        onResetStorage={resetStorage}
+       />
+ 
+       <section className="main-panel" aria-label={toolbarLabels.mainPanel} inert={showDetail || undefined}>
+         <TaskToolbar
+           viewMode={viewMode}
+           searchInputRef={searchInputRef}
+           filters={filters}
+           workspaceStatus={workspaceStatus}
+           activeFilterLabels={activeFilterLabels}
+           activeFilterCount={activeFilterLabels.length}
+diff --git a/src/features/tasks/taskBackup.test.ts b/src/features/tasks/taskBackup.test.ts
+index a7e1cdf..e712592 100644
+--- a/src/features/tasks/taskBackup.test.ts
++++ b/src/features/tasks/taskBackup.test.ts
+@@ -1,32 +1,57 @@
+ import { describe, expect, it } from 'vitest';
+-import { exportTasksToJson, importTasksFromJson } from './taskBackup';
++import { decodeTaskArray, exportTasksToJson, importTasksFromJson } from './taskBackup';
+ import type { Task } from './taskTypes';
+ 
+ const task: Task = {
+   id: 'task-1',
+   title: 'Write weekly review',
+   notes: 'Use notes from Friday',
+   status: 'next',
+   priority: 'high',
+   dueDate: '2026-07-03',
+   project: 'Life OS',
+   labels: ['review', 'focus'],
+   createdAt: '2026-07-01T08:00:00.000Z',
+   updatedAt: '2026-07-01T08:00:00.000Z',
+   completedAt: '',
+   sortOrder: 1000,
+   estimateMinutes: 45,
+   energy: 'high',
+ };
+ 
++const unsafeTaskArrays: unknown[] = [
++  [{ ...task, id: '' }],
++  [{ ...task, id: '   ' }],
++  [{ ...task, dueDate: '2026-02-30' }],
++  [{ ...task, createdAt: 'yesterday' }],
++  [{ ...task, status: 'done', completedAt: '' }],
++  [{ ...task, status: 'next', completedAt: '2026-07-01T08:00:00.000Z' }],
++  [{ ...task }, { ...task }],
++  [{ ...task, notes: 'x'.repeat(20001) }],
++  [{ ...task, labels: Array.from({ length: 51 }, (_, index) => `label-${index}`) }],
++  [{ ...task, hiddenSecret: 'must-not-round-trip' }],
++];
++
+ describe('taskBackup', () => {
++  it('decodes a valid empty task array', () => {
++    expect(decodeTaskArray([])).toEqual([]);
++  });
++
++  it('rejects a whitespace-only task title', () => {
++    expect(decodeTaskArray([{ ...task, title: '   ' }])).toBeUndefined();
++  });
++
++  it.each(unsafeTaskArrays)('rejects unsafe task data %#', (tasks) => {
++    expect(decodeTaskArray(tasks)).toBeUndefined();
++  });
++
+   it('exports tasks as readable JSON with a schema version', () => {
+     const json = exportTasksToJson([task]);
+ 
+     expect(JSON.parse(json)).toEqual({
+       version: 1,
+       exportedAt: expect.any(String),
+       tasks: [task],
+     });
+     expect(json).toContain('\n  "tasks"');
+   });
+@@ -34,20 +59,24 @@ describe('taskBackup', () => {
+   it('imports tasks from the backup format', () => {
+     const json = JSON.stringify({ version: 1, exportedAt: '2026-07-03T08:00:00.000Z', tasks: [task] });
+ 
+     expect(importTasksFromJson(json)).toEqual([task]);
+   });
+ 
+   it('imports a raw task array for compatibility', () => {
+     expect(importTasksFromJson(JSON.stringify([task]))).toEqual([task]);
+   });
+ 
++  it('rejects unsupported object backup versions', () => {
++    expect(() => importTasksFromJson(JSON.stringify({ version: 2, tasks: [task] }))).toThrow('不支持的任务备份版本。');
++  });
++
+   it('adds sort order when importing older task backups', () => {
+     const { sortOrder, estimateMinutes, energy, ...legacyTask } = task;
+ 
+     expect(importTasksFromJson(JSON.stringify([legacyTask]))).toEqual([{
+       ...legacyTask,
+       sortOrder: 1000,
+       estimateMinutes: 0,
+       energy: 'medium',
+     }]);
+   });
+diff --git a/src/features/tasks/taskBackup.ts b/src/features/tasks/taskBackup.ts
+index c0df61a..97bd1a8 100644
+--- a/src/features/tasks/taskBackup.ts
++++ b/src/features/tasks/taskBackup.ts
+@@ -16,40 +16,84 @@ function isString(value: unknown): value is string {
+ }
+ 
+ function isStringArray(value: unknown): value is string[] {
+   return Array.isArray(value) && value.every(isString);
+ }
+ 
+ function isNumberOrMissing(value: unknown): boolean {
+   return value === undefined || (typeof value === 'number' && Number.isFinite(value));
+ }
+ 
+-function isTask(value: unknown): value is Task {
+-  if (!value || typeof value !== 'object') return false;
++function isRealDate(value: string): boolean {
++  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
++  const [year, month, day] = value.split('-').map(Number);
++  const date = new Date(Date.UTC(year, month - 1, day));
++  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
++}
++
++function isIsoTimestamp(value: string): boolean {
++  return /^\d{4}-\d{2}-\d{2}T/.test(value) && !Number.isNaN(Date.parse(value));
++}
++
++const taskKeys = new Set([
++  'id', 'title', 'notes', 'status', 'priority', 'dueDate', 'project', 'labels', 'createdAt', 'updatedAt', 'completedAt', 'sortOrder', 'estimateMinutes', 'energy',
++]);
++
++function decodeTask(value: unknown): Task | undefined {
++  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+   const task = value as Partial<Task>;
++  if (Object.keys(task).some((key) => !taskKeys.has(key))) return undefined;
++  if (
++    !isString(task.id) || !task.id.trim() || task.id.length > 200 ||
++    !isString(task.title) || !task.title.trim() || task.title.length > 500 ||
++    !isString(task.notes) || task.notes.length > 20000 ||
++    !isString(task.project) || task.project.length > 200 ||
++    !isStringArray(task.labels) || task.labels.length > 50 || task.labels.some((label) => label.length > 100) ||
++    !isString(task.dueDate) || (task.dueDate !== '' && !isRealDate(task.dueDate)) ||
++    !isString(task.createdAt) || !isIsoTimestamp(task.createdAt) ||
++    !isString(task.updatedAt) || !isIsoTimestamp(task.updatedAt) ||
++    !isString(task.completedAt) ||
++    !isNumberOrMissing(task.sortOrder) || !isNumberOrMissing(task.estimateMinutes) ||
++    !statuses.includes(task.status as TaskStatus) || !priorities.includes(task.priority as TaskPriority) ||
++    (task.energy !== undefined && !energies.includes(task.energy as TaskEnergy))
++  ) return undefined;
++  if ((task.status === 'done' && !isIsoTimestamp(task.completedAt)) || (task.status !== 'done' && task.completedAt !== '')) return undefined;
++
++  return {
++    id: task.id,
++    title: task.title,
++    notes: task.notes,
++    status: task.status as TaskStatus,
++    priority: task.priority as TaskPriority,
++    dueDate: task.dueDate,
++    project: task.project,
++    labels: [...task.labels],
++    createdAt: task.createdAt,
++    updatedAt: task.updatedAt,
++    completedAt: task.completedAt,
++    sortOrder: task.sortOrder as number,
++    estimateMinutes: task.estimateMinutes as number,
++    energy: task.energy as TaskEnergy,
++  };
++}
+ 
+-  return (
+-    isString(task.id) &&
+-    isString(task.title) &&
+-    isString(task.notes) &&
+-    isString(task.dueDate) &&
+-    isString(task.project) &&
+-    isString(task.createdAt) &&
+-    isString(task.updatedAt) &&
+-    isString(task.completedAt) &&
+-    isNumberOrMissing(task.sortOrder) &&
+-    isNumberOrMissing(task.estimateMinutes) &&
+-    isStringArray(task.labels) &&
+-    statuses.includes(task.status as TaskStatus) &&
+-    priorities.includes(task.priority as TaskPriority) &&
+-    (task.energy === undefined || energies.includes(task.energy as TaskEnergy))
+-  );
++export function decodeTaskArray(value: unknown): Task[] | undefined {
++  if (!Array.isArray(value) || value.length > 10000) return undefined;
++  const ids = new Set<string>();
++  const tasks: Task[] = [];
++  for (const item of value) {
++    const task = decodeTask(item);
++    if (!task || ids.has(task.id)) return undefined;
++    ids.add(task.id);
++    tasks.push(task);
++  }
++  return normalizeTasks(tasks);
+ }
+ 
+ function parseBackup(json: string): unknown {
+   try {
+     return JSON.parse(json) as unknown;
+   } catch {
+     throw new Error('导入文件不是有效的 JSON。');
+   }
+ }
+ 
+@@ -58,18 +102,22 @@ export function exportTasksToJson(tasks: Task[], exportedAt = new Date().toISOSt
+     version: 1,
+     exportedAt,
+     tasks,
+   };
+ 
+   return JSON.stringify(backup, null, 2);
+ }
+ 
+ export function importTasksFromJson(json: string): Task[] {
+   const parsed = parseBackup(json);
++  if (!Array.isArray(parsed) && (parsed as Partial<TaskBackup> | null)?.version !== 1) {
++    throw new Error('不支持的任务备份版本。');
++  }
+   const tasks = Array.isArray(parsed) ? parsed : (parsed as Partial<TaskBackup> | null)?.tasks;
++  const decoded = decodeTaskArray(tasks);
+ 
+-  if (!Array.isArray(tasks) || !tasks.every(isTask)) {
++  if (!decoded) {
+     throw new Error('导入文件不包含有效的任务数据。');
+   }
+ 
+-  return normalizeTasks(tasks);
++  return decoded;
+ }
+diff --git a/src/features/tasks/taskUiText.ts b/src/features/tasks/taskUiText.ts
+index 58ef09b..e7614bd 100644
+--- a/src/features/tasks/taskUiText.ts
++++ b/src/features/tasks/taskUiText.ts
+@@ -71,20 +71,24 @@ export const quickAddLabels = {
+   collapseDetails: '收起详细字段',
+   addTask: '添加任务',
+   backupTitle: '任务备份',
+   export: '导出',
+   import: '导入任务 JSON',
+   importInput: '导入任务 JSON',
+   importTitle: '确认导入任务',
+   replace: '替换当前任务',
+   merge: '合并到当前任务',
+   cancel: '取消导入',
++  recoveryTitle: '本地存储恢复',
++  downloadDamagedData: '下载损坏的原始数据',
++  retryStorage: '重试本地存储',
++  resetStorage: '使用当前任务重置本地存储',
+ } as const;
+ 
+ export const columnQuickAddLabels = {
+   form: (status: string) => `在${status}中新建任务`,
+   title: (status: string) => `${status}任务标题`,
+   submit: (status: string) => `添加到${status}`,
+   placeholder: '添加任务',
+   created: (status: string, title: string) => `已在${status}创建任务“${title}”。`,
+ } as const;
+ 
+diff --git a/src/lib/storage.test.ts b/src/lib/storage.test.ts
+index cde1168..1133ea9 100644
+--- a/src/lib/storage.test.ts
++++ b/src/lib/storage.test.ts
+@@ -1,26 +1,57 @@
+ import { describe, expect, it } from 'vitest';
+-import { loadJson, saveJson, type StorageLike } from './storage';
++import { loadJson, readJson, saveJson, type StorageLike } from './storage';
+ 
+ function createMemoryStorage(initial: Record<string, string> = {}): StorageLike & { data: Record<string, string> } {
+   return {
+     data: { ...initial },
+     getItem(key: string) {
+       return this.data[key] ?? null;
+     },
+     setItem(key: string, value: string) {
+       this.data[key] = value;
+     },
+   };
+ }
+ 
+ describe('storage', () => {
++  it('returns invalid JSON with its original raw text', () => {
++    const storage = createMemoryStorage({ tasks: '{broken' });
++
++    expect(readJson('tasks', storage)).toEqual({ status: 'invalid', raw: '{broken' });
++  });
++
++  it('distinguishes missing, successful, and unavailable reads', () => {
++    const storage = createMemoryStorage({ saved: JSON.stringify({ id: 'task-1' }) });
++
++    expect(readJson('missing', storage)).toEqual({ status: 'missing' });
++    expect(readJson<{ id: string }>('saved', storage)).toEqual({ status: 'success', value: { id: 'task-1' }, raw: JSON.stringify({ id: 'task-1' }) });
++    expect(readJson('tasks', undefined)).not.toEqual({ status: 'invalid' });
++  });
++
++  it('returns unavailable when the browser storage getter throws', () => {
++    const descriptor = Object.getOwnPropertyDescriptor(window, 'localStorage');
++    Object.defineProperty(window, 'localStorage', {
++      configurable: true,
++      get() {
++        throw new Error('blocked');
++      },
++    });
++
++    try {
++      expect(readJson('tasks')).toEqual({ status: 'unavailable' });
++    } finally {
++      if (descriptor) Object.defineProperty(window, 'localStorage', descriptor);
++      else delete (window as unknown as Record<string, unknown>).localStorage;
++    }
++  });
++
+   it('loads parsed JSON from storage', () => {
+     const storage = createMemoryStorage({ tasks: JSON.stringify([{ id: 'task-1' }]) });
+ 
+     expect(loadJson('tasks', [], storage)).toEqual([{ id: 'task-1' }]);
+   });
+ 
+   it('saves JSON to storage', () => {
+     const storage = createMemoryStorage();
+ 
+     saveJson('tasks', [{ id: 'task-1' }], storage);
+diff --git a/src/lib/storage.ts b/src/lib/storage.ts
+index 49f024e..9ff70fb 100644
+--- a/src/lib/storage.ts
++++ b/src/lib/storage.ts
+@@ -1,30 +1,47 @@
+ export interface StorageLike {
+   getItem(key: string): string | null;
+   setItem(key: string, value: string): void;
+ }
+ 
++export type JsonReadResult<T> =
++  | { status: 'missing' }
++  | { status: 'success'; value: T; raw: string }
++  | { status: 'invalid'; raw: string }
++  | { status: 'unavailable' };
++
+ function browserStorage(): StorageLike | undefined {
+   if (typeof window === 'undefined') return undefined;
+   return window.localStorage;
+ }
+ 
+-export function loadJson<T>(key: string, fallback: T, storage: StorageLike | undefined = browserStorage()): T {
+-  if (!storage) return fallback;
+-
++export function readJson<T>(key: string, storage?: StorageLike): JsonReadResult<T> {
+   try {
+-    const raw = storage.getItem(key);
+-    return raw ? (JSON.parse(raw) as T) : fallback;
++    const resolvedStorage = storage ?? browserStorage();
++    if (!resolvedStorage) return { status: 'unavailable' };
++    const raw = resolvedStorage.getItem(key);
++    if (raw === null) return { status: 'missing' };
++    try {
++      return { status: 'success', value: JSON.parse(raw) as T, raw };
++    } catch {
++      return { status: 'invalid', raw };
++    }
+   } catch {
+-    return fallback;
++    return { status: 'unavailable' };
+   }
+ }
+ 
+-export function saveJson<T>(key: string, value: T, storage: StorageLike | undefined = browserStorage()): void {
+-  if (!storage) return;
++export function loadJson<T>(key: string, fallback: T, storage?: StorageLike): T {
++  const result = readJson<T>(key, storage);
++  return result.status === 'success' ? result.value : fallback;
++}
++
++export function saveJson<T>(key: string, value: T, storage?: StorageLike): void {
+   try {
+-    storage.setItem(key, JSON.stringify(value));
++    const resolvedStorage = storage ?? browserStorage();
++    if (!resolvedStorage) return;
++    resolvedStorage.setItem(key, JSON.stringify(value));
+   } catch (error) {
+     console.error(`[storage] Failed to save key "${key}":`, error);
+     throw error;
+   }
+ }
