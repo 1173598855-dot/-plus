@@ -13,3 +13,6 @@ output/
 
 # One-off debug scripts
 fix_workspace.py
+
+# Local development plans, reviews, and handoff archives
+.superpowers/
